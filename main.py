@@ -109,9 +109,10 @@ def get_thread_replies(channel_id: str, thread_ts: str) -> List[Dict]:
         return []
 
 def extract_faq_with_llm(threads: List[Dict]) -> List[Dict]:
-    """Extract FAQ using OpenAI's API in two steps:
+    """Extract FAQ using OpenAI's API in three steps:
     1. Extract Q&A pairs from threads
-    2. Format them into proper FAQ documentation in Korean
+    2. Group and generalize similar questions
+    3. Format them into comprehensive Korean FAQ documentation
     """
     raw_qas = []
     
@@ -136,13 +137,14 @@ def extract_faq_with_llm(threads: List[Dict]) -> List[Dict]:
 Your task is to:
 1. Identify if the conversation contains a clear question and its corresponding answer
 2. Extract the core question and answer, preserving technical accuracy
-3. Format the output as a JSON object with "question" and "answer" fields
-4. If the conversation doesn't contain a clear Q&A, return {"question": null, "answer": null}
+3. Format the output as a JSON object with "question", "answer", and "context" fields
+4. If the conversation doesn't contain a clear Q&A, return {"question": null, "answer": null, "context": null}
 
 Example output format:
 {
     "question": "How can I fix the deployment error in staging?",
-    "answer": "The deployment error was caused by missing environment variables. Adding DATABASE_URL to the .env.staging file resolved the issue."
+    "answer": "The deployment error was caused by missing environment variables. Adding DATABASE_URL to the .env.staging file resolved the issue.",
+    "context": "Deployment, Environment Variables, Staging Environment"
 }"""},
                     {"role": "user", "content": f"Please analyze this Slack thread and extract the core question and answer if present:\n\n{thread_text}"}
                 ],
@@ -172,42 +174,86 @@ Example output format:
     
     print(f"\n총 {len(raw_qas)}개의 Q&A 쌍을 추출했습니다.")
     
-    # Step 2: Format into proper FAQ documentation in Korean
+    # Step 2: Group and generalize similar questions
     if not raw_qas:
         return []
         
-    print("\n2단계: FAQ 문서화 진행 중...")
+    print("\n2단계: Q&A 분석 및 일반화 중...")
     try:
+        response = client_openai.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": """You are an AI that analyzes and generalizes Q&A pairs into comprehensive FAQ items.
+
+Your task is to:
+1. Group similar questions together
+2. Generalize specific questions into more broadly applicable ones
+3. Enhance answers with additional context and best practices
+4. Format the output as a JSON array of grouped FAQ items
+
+Example output format:
+{
+    "grouped_faqs": [
+        {
+            "category": "환경 설정",
+            "items": [
+                {
+                    "general_question": "환경 변수 설정은 어떻게 관리해야 하나요?",
+                    "specific_examples": ["스테이징 환경에서 DB_URL 설정", "프로덕션 환경의 API 키 관리"],
+                    "comprehensive_answer": "환경 변수 관리 모범 사례:\n1. 환경별 .env 파일 사용 (.env.staging, .env.production)\n2. 민감한 정보는 암호화하여 저장\n3. 환경 변수 템플릿 (.env.example) 제공\n4. 주기적인 키 로테이션 실행",
+                    "best_practices": ["환경 변수 암호화", "정기적인 키 갱신", "접근 권한 제한"],
+                    "related_topics": ["보안", "설정 관리", "배포 프로세스"]
+                }
+            ]
+        }
+    ]
+}"""},
+                {"role": "user", "content": f"Please analyze and group these Q&A pairs into comprehensive FAQ items:\n\n{json.dumps(raw_qas, indent=2, ensure_ascii=False)}"}
+            ],
+            temperature=0.3
+        )
+        
+        grouped_result = response.choices[0].message.content
+        print(f"\nGrouping result:\n{grouped_result}\n")
+        
+        # Step 3: Format into final Korean FAQ documentation
+        print("\n3단계: 최종 FAQ 문서화 진행 중...")
         response = client_openai.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": """You are an AI that creates well-formatted Korean FAQ documentation.
 
 Your task is to:
-1. Convert the given Q&A pairs into proper Korean FAQ format
+1. Convert the grouped FAQ items into final documentation format
 2. Make the documentation clear and professional:
-   - Translate to natural Korean
-   - Make questions concise but descriptive
-   - Format answers in clear, step-by-step instructions when applicable
-   - Maintain technical accuracy while improving readability
+   - Use natural, professional Korean
+   - Ensure questions are concise but descriptive
+   - Format answers with clear structure and examples
+   - Include relevant context and best practices
 3. Format the output as a JSON array of FAQ items
 
 Example output format:
 {
     "faqs": [
         {
-            "question": "스테이징 환경에서 로깅 레벨을 어떻게 설정하나요?",
-            "answer": "스테이징 환경의 로깅 레벨 설정 방법:\n1. .env.staging 파일을 엽니다\n2. LOG_LEVEL을 다음 중 하나로 설정: DEBUG, INFO, WARN, ERROR\n3. 애플리케이션을 재시작합니다"
+            "category": "환경 설정",
+            "question": "환경 변수 설정은 어떻게 관리해야 하나요?",
+            "answer": "환경 변수 관리를 위한 모범 사례는 다음과 같습니다:\n\n1. 환경별 설정 파일 관리\n   - .env.staging: 스테이징 환경 설정\n   - .env.production: 프로덕션 환경 설정\n\n2. 보안 관리\n   - 민감한 정보는 반드시 암호화\n   - 정기적인 키 로테이션 실행\n   - 접근 권한 제한 설정\n\n3. 문서화\n   - .env.example 템플릿 제공\n   - 필수 환경 변수 목록 관리",
+            "related_info": {
+                "참고 사항": ["환경 변수 암호화 가이드", "키 관리 정책", "접근 권한 설정 방법"],
+                "관련 주제": ["보안", "설정 관리", "배포 프로세스"],
+                "자주 묻는 질문": ["프로덕션 배포 전 체크리스트가 있나요?", "환경 변수 동기화는 어떻게 하나요?"]
+            }
         }
     ]
 }"""},
-                {"role": "user", "content": f"Please convert these Q&A pairs into Korean FAQ documentation:\n\n{json.dumps(raw_qas, indent=2, ensure_ascii=False)}"}
+                {"role": "user", "content": f"Please convert these grouped FAQ items into final Korean documentation:\n\n{grouped_result}"}
             ],
             temperature=0.3
         )
         
         result = response.choices[0].message.content
-        print(f"\nSecond pass result:\n{result}\n")
+        print(f"\nFinal documentation result:\n{result}\n")
         
         formatted_faqs = json.loads(result)
         if isinstance(formatted_faqs, dict) and "faqs" in formatted_faqs:
@@ -215,7 +261,7 @@ Example output format:
             return formatted_faqs["faqs"]
             
     except Exception as e:
-        print(f"Error in second pass: {str(e)}")
+        print(f"Error in documentation process: {str(e)}")
         return []
     
     return []
