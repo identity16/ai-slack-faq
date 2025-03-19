@@ -266,6 +266,146 @@ Example output format:
     
     return []
 
+def convert_to_markdown(faqs: List[Dict]) -> str:
+    """Convert FAQ items to markdown format"""
+    if not faqs:
+        return ""
+    
+    # Group FAQs by category
+    categories = {}
+    for faq in faqs:
+        category = faq.get("category", "기타")
+        if category not in categories:
+            categories[category] = []
+        categories[category].append(faq)
+    
+    # Generate markdown
+    markdown = "# 자주 묻는 질문 (FAQ)\n\n"
+    
+    # Add table of contents
+    markdown += "## 목차\n\n"
+    for category in categories.keys():
+        markdown += f"- [{category}](#{category.replace(' ', '-')})\n"
+    markdown += "\n---\n\n"
+    
+    # Add FAQ items by category
+    for category, items in categories.items():
+        markdown += f"## {category}\n\n"
+        for item in items:
+            markdown += f"### {item['question']}\n\n"
+            markdown += f"{item['answer']}\n\n"
+            
+            # Add related information if available
+            if "related_info" in item:
+                related_info = item["related_info"]
+                if "참고 사항" in related_info:
+                    markdown += "**참고 사항:**\n"
+                    for ref in related_info["참고 사항"]:
+                        markdown += f"- {ref}\n"
+                    markdown += "\n"
+                
+                if "관련 주제" in related_info:
+                    markdown += "**관련 주제:**\n"
+                    for topic in related_info["관련 주제"]:
+                        markdown += f"- {topic}\n"
+                    markdown += "\n"
+                
+                if "자주 묻는 질문" in related_info:
+                    markdown += "**관련 질문:**\n"
+                    for q in related_info["자주 묻는 질문"]:
+                        markdown += f"- {q}\n"
+                    markdown += "\n"
+            
+            markdown += "---\n\n"
+    
+    # Add metadata
+    markdown += f"\n*마지막 업데이트: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n"
+    return markdown
+
+def update_markdown_file(new_faqs: List[Dict], markdown_file: str = "FAQ.md"):
+    """Update markdown file with new FAQs"""
+    existing_faqs = []
+    
+    # Read existing markdown file if it exists
+    if os.path.exists(markdown_file):
+        print(f"\n기존 FAQ 문서를 읽는 중...")
+        try:
+            # Convert existing markdown back to FAQ format
+            response = client_openai.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": """You are an AI that converts markdown FAQ documentation back to structured JSON format.
+Your task is to:
+1. Extract FAQ items from the markdown
+2. Preserve all information including categories and related info
+3. Format the output as a JSON array of FAQ items using the same structure as before
+
+Output format should match:
+{
+    "faqs": [
+        {
+            "category": "환경 설정",
+            "question": "환경 변수 설정은 어떻게 관리해야 하나요?",
+            "answer": "환경 변수 관리를 위한 모범 사례는...",
+            "related_info": {
+                "참고 사항": ["환경 변수 암호화 가이드", ...],
+                "관련 주제": ["보안", ...],
+                "자주 묻는 질문": ["프로덕션 배포 전 체크리스트가 있나요?", ...]
+            }
+        }
+    ]
+}"""},
+                    {"role": "user", "content": f"Please convert this markdown FAQ document to JSON format:\n\n{open(markdown_file, 'r', encoding='utf-8').read()}"}
+                ],
+                temperature=0.3
+            )
+            
+            result = json.loads(response.choices[0].message.content)
+            if isinstance(result, dict) and "faqs" in result:
+                existing_faqs = result["faqs"]
+                print(f"기존 FAQ {len(existing_faqs)}개를 읽었습니다.")
+        except Exception as e:
+            print(f"기존 FAQ 읽기 실패: {str(e)}")
+            print("새로운 FAQ 문서를 시작합니다.")
+    
+    # Merge existing and new FAQs
+    if existing_faqs:
+        print("\nFAQ 병합 중...")
+        try:
+            response = client_openai.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": """You are an AI that merges FAQ items intelligently.
+Your task is to:
+1. Combine existing and new FAQ items
+2. Remove duplicates and merge similar items
+3. Preserve all unique information
+4. Maintain consistent categorization
+5. Format the output as a JSON array of FAQ items"""},
+                    {"role": "user", "content": f"Please merge these two sets of FAQ items:\n\nExisting FAQs:\n{json.dumps(existing_faqs, indent=2, ensure_ascii=False)}\n\nNew FAQs:\n{json.dumps(new_faqs, indent=2, ensure_ascii=False)}"}
+                ],
+                temperature=0.3
+            )
+            
+            result = json.loads(response.choices[0].message.content)
+            if isinstance(result, dict) and "faqs" in result:
+                merged_faqs = result["faqs"]
+                print(f"FAQ 병합 완료: 총 {len(merged_faqs)}개 항목")
+            else:
+                merged_faqs = existing_faqs + new_faqs
+                print("FAQ 자동 병합 실패. 단순 병합으로 진행합니다.")
+        except Exception as e:
+            print(f"FAQ 병합 중 오류 발생: {str(e)}")
+            merged_faqs = existing_faqs + new_faqs
+    else:
+        merged_faqs = new_faqs
+    
+    # Convert to markdown and save
+    markdown_content = convert_to_markdown(merged_faqs)
+    with open(markdown_file, 'w', encoding='utf-8') as f:
+        f.write(markdown_content)
+    print(f"\nFAQ 문서가 {markdown_file}에 업데이트되었습니다.")
+
 def main():
     # Get user inputs
     channel_name = input("Enter Slack channel name (without #): ")
@@ -297,11 +437,14 @@ def main():
     print("Analyzing threads with LLM...")
     faqs = extract_faq_with_llm(threads)
     
-    # Save results
+    # Save results to CSV
     df = pd.DataFrame(faqs)
     output_file = f"faq_{channel_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
     df.to_csv(output_file, index=False, encoding='utf-8-sig')
     print(f"FAQs saved to {output_file}")
+    
+    # Update markdown documentation
+    update_markdown_file(faqs)
 
 if __name__ == "__main__":
     main()

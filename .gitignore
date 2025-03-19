@@ -3,3 +3,4 @@ __pycache__/
 venv/
 # FAQ 결과 파일
 faq_*.csv
+FAQ.md
