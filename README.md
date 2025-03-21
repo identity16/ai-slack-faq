@@ -102,3 +102,49 @@ LLM 기반 업데이트 시 수행되는 작업:
 - OpenAI API 사용량에 따른 비용이 발생할 수 있습니다.
 - 슬랙 봇은 초대된 채널의 메시지만 접근할 수 있습니다.
 - 노션 통합은 공유된 페이지/데이터베이스만 접근할 수 있습니다.
+
+## 아키텍처 구조
+
+이 프로젝트는 다음과 같은 3계층 아키텍처로 구성되어 있습니다:
+
+### 1. Repository 계층
+- 외부 데이터 소스에서 원본 데이터를 가져오는 역할
+- `src/repositories/` 디렉토리에 위치
+- 주요 클래스:
+  - `SlackRepository`: 슬랙 API를 통해 채널 및 스레드 데이터 가져오기
+  - `NotionRepository`: 노션 API를 통해 UT 녹취록 데이터 가져오기
+
+### 2. Processor 계층
+- 원본 데이터를 정제, 분류, 저장하는 역할
+- `src/processors/` 디렉토리에 위치
+- 주요 클래스:
+  - `SlackProcessor`: 슬랙 스레드 데이터 정제 및 분류
+  - `NotionProcessor`: 노션 녹취록 데이터 정제 및 분석
+  - `DataStore`: 정제된 데이터 저장 및 관리
+
+### 3. Document 계층
+- 정제된 데이터를 기반으로 문서를 생성하고 관리하는 역할
+- `src/documents/` 디렉토리에 위치
+- 주요 클래스:
+  - `SlackFAQGenerator`: 슬랙 데이터로 FAQ 문서 생성
+  - `UTDebriefGenerator`: 노션 데이터로 Debrief 문서 생성
+  - `DocumentManager`: 문서 업데이트, 병합 등 관리
+
+이 구조를 통해 데이터 소스, 데이터 처리, 문서 생성의 관심사를 명확하게 분리하여 코드의 가독성과 유지보수성을 높였습니다.
+
+## GUI 앱 사용 방법
+
+웹 인터페이스를 통해 문서 생성 및 관리가 가능합니다:
+
+```bash
+# GUI 앱 실행
+streamlit run app.py
+```
+
+GUI 앱 기능:
+- 문서 목록 조회 및 관리 (보기, 다운로드, 삭제)
+- 슬랙 FAQ 생성 (채널, 기간 지정)
+- UT Debrief 생성 (노션 문서 지정)
+- 리소스 파일 업로드 및 관리 (PDF, DOCX, XLSX, CSV 등)
+
+![GUI 앱 화면](https://example.com/gui_screenshot.png)
