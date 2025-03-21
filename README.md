@@ -19,7 +19,7 @@ Log2Doc은 LLM(Large Language Model)을 활용하여 Raw Data → Semantic Data 
 
 3. **Document 생성 모듈** (`src/document/`)
    - 시맨틱 데이터 기반 문서 생성
-   - FAQ, 가이드 등 다양한 문서 템플릿 지원
+   - FAQ, 가이드, 용어집 등 다양한 문서 템플릿 지원
    - HTML/Markdown 형식 출력
 
 ## 설치 및 실행
@@ -47,6 +47,16 @@ cp .env.example .env
 ```bash
 # 개발 서버 실행
 python app.py
+
+# CLI로 문서 생성
+python main.py faq --channel [채널명] --days [일자]
+python main.py guide --doc_id [노션문서ID]
+
+# 용어집 생성
+python main.py glossary  # 예제 데이터로 용어집 생성
+python main.py glossary --source slack --channel [채널명] --days [일자]  # 슬랙 데이터로 용어집 생성
+python main.py glossary --source notion --doc_id [노션문서ID]  # 노션 데이터로 용어집 생성
+python main.py glossary --format html  # HTML 형식으로 용어집 생성
 ```
 
 ## 프로젝트 구조
