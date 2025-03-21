@@ -131,7 +131,7 @@ def extract_faq_with_llm(threads: List[Dict]) -> List[Dict]:
         try:
             # First pass: Extract raw Q&A
             response = client_openai.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": """You are an AI that analyzes Slack conversations and extracts question-answer pairs.
 Your task is to:
@@ -181,7 +181,7 @@ Example output format:
     print("\n2단계: Q&A 분석 및 일반화 중...")
     try:
         response = client_openai.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": """You are an AI that analyzes and generalizes Q&A pairs into comprehensive FAQ items.
 
@@ -219,7 +219,7 @@ Example output format:
         # Step 3: Format into final Korean FAQ documentation
         print("\n3단계: 최종 FAQ 문서화 진행 중...")
         response = client_openai.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": """You are an AI that creates well-formatted Korean FAQ documentation.
 
@@ -332,7 +332,7 @@ def update_markdown_file(new_faqs: List[Dict], markdown_file: str = "FAQ.md"):
         try:
             # Convert existing markdown back to FAQ format
             response = client_openai.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": """You are an AI that converts markdown FAQ documentation back to structured JSON format.
 Your task is to:
@@ -373,7 +373,7 @@ Output format should match:
         print("\nFAQ 병합 중...")
         try:
             response = client_openai.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": """You are an AI that merges FAQ items intelligently.
 Your task is to:
