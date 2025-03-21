@@ -14,7 +14,7 @@ from typing import Optional
 from dotenv import load_dotenv
 
 from src.raw_data import SlackCollector, NotionCollector
-from src.semantic_data import SlackExtractor, NotionExtractor, SQLiteStore
+from src.semantic_data import SemanticType, SlackExtractor, NotionExtractor, SQLiteStore
 from src.document import DocumentType, MarkdownGenerator, HTMLGenerator
 
 # 환경 변수 로드
