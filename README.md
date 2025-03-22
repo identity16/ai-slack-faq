@@ -91,3 +91,10 @@ python main.py glossary --format html  # HTML 형식으로 용어집 생성
 ## 라이선스
 
 MIT License
+
+# Streamlit 앱 실행 방법
+
+```bash
+streamlit run playground.py
+```
+
