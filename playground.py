@@ -186,7 +186,7 @@ with tab2:
         if st.session_state.semantic_data:
             # 데이터 필터링 옵션
             semantic_types = ["모두 표시"]
-            semantic_types.extend([t for t in dir(SemanticType) if not t.startswith("__") and t.isupper()])
+            semantic_types.extend([t for t in dir(SemanticType) if not t.startswith("__")])
             selected_type = st.selectbox("시맨틱 데이터 유형 필터링", semantic_types)
             
             filtered_data = st.session_state.semantic_data

@@ -96,13 +96,10 @@ class SemanticStore(ABC):
 
 from .extractors.slack import SlackExtractor
 from .extractors.notion import NotionExtractor
-from .extractors.glossary import GlossaryExtractor
 from .store.sqlite import SQLiteStore
 from .core import (
     LLMClient, 
-    PromptTemplateFactory, 
-    GlossaryEnhancementPromptTemplate, 
-    enhance_low_confidence_terms
+    PromptTemplateFactory
 )
 
 __all__ = [
@@ -112,10 +109,7 @@ __all__ = [
     'SemanticStore',
     'SlackExtractor',
     'NotionExtractor',
-    'GlossaryExtractor',
     'SQLiteStore',
     'LLMClient',
-    'PromptTemplateFactory',
-    'GlossaryEnhancementPromptTemplate',
-    'enhance_low_confidence_terms'
+    'PromptTemplateFactory'
 ] 
