@@ -5,50 +5,48 @@ Slack Semantic Data Extractor
 """
 
 import os
-from typing import Dict, Any, List
-from openai import AsyncOpenAI
-import httpx
-import json
+from typing import Dict, Any, List, Optional, Callable
 
-from .. import SemanticExtractor, SemanticType
+from .. import SemanticExtractor
+from ..core import LLMClient, PromptTemplateFactory
 
 class SlackExtractor(SemanticExtractor):
     """슬랙 데이터에서 시맨틱 정보를 추출하는 클래스"""
     
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, config: Dict[str, Any] = None, llm_client: Optional[LLMClient] = None):
         """
         초기화
         
         Args:
             config: OpenAI API 키 등 설정 정보
+            llm_client: LLM 클라이언트 (없으면 새로 생성)
         """
         api_key = config.get("openai_api_key") if config else os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OpenAI API 키가 설정되지 않았습니다.")
-        self.client = AsyncOpenAI(api_key=api_key)
-        self._session = None
+        self.llm_client = llm_client or LLMClient(api_key=api_key)
+        
+        # 부모 클래스 초기화
+        super().__init__(prompt_templates=None)
+        
+        # 프롬프트 템플릿 등록
+        templates = PromptTemplateFactory.create_slack_templates(self.llm_client)
+        for semantic_type, template in templates.items():
+            self.register_prompt_template(semantic_type, template)
     
     async def __aenter__(self):
         """비동기 컨텍스트 관리자 진입"""
-        self._session = httpx.AsyncClient()
-        self.client = AsyncOpenAI(
-            api_key=os.environ.get("OPENAI_API_KEY"),
-            http_client=self._session
-        )
+        await self.llm_client.__aenter__()
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """비동기 컨텍스트 관리자 종료"""
-        if self._session:
-            await self._session.aclose()
+        await self.llm_client.__aexit__(exc_type, exc_val, exc_tb)
     
     async def close(self):
         """리소스 정리"""
-        if self._session:
-            await self._session.aclose()
-            self._session = None
+        await self.llm_client.close()
     
-    async def extract(self, raw_data: List[Dict[str, Any]], progress_callback=None) -> List[Dict[str, Any]]:
+    async def extract(self, raw_data: List[Dict[str, Any]], 
+                     progress_callback: Optional[Callable[[int, int], None]] = None) -> List[Dict[str, Any]]:
         """
         슬랙 스레드에서 시맨틱 데이터 추출
         
@@ -69,171 +67,18 @@ class SlackExtractor(SemanticExtractor):
                 
             # 스레드에 메시지가 있는지 확인
             if "messages" in thread and len(thread["messages"]) >= 2:
-                # Q&A 추출
-                qa_data = await self._extract_qa(thread)
-                if qa_data:
-                    semantic_data.append(qa_data)
+                # QA 프롬프트 템플릿 처리
+                if "qna" in self.prompt_templates:
+                    qa_results = await self.prompt_templates["qna"].process(thread)
+                    semantic_data.extend(qa_results)
                 
-                # 인사이트 추출
-                insights = await self._extract_insights(thread)
-                semantic_data.extend(insights)
+                # 인사이트 프롬프트 템플릿 처리
+                if "insights" in self.prompt_templates:
+                    insights_results = await self.prompt_templates["insights"].process(thread)
+                    semantic_data.extend(insights_results)
         
         # 최종 진행 상황 업데이트
         if progress_callback:
             progress_callback(total, total)
             
-        return semantic_data
-    
-    async def _extract_qa(self, thread_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Q&A 형식의 시맨틱 데이터 추출
-        
-        Args:
-            thread_data: 스레드 데이터
-            
-        Returns:
-            Q&A 시맨틱 데이터
-        """
-        # 메시지 목록에서 첫 번째 메시지와 두 번째 메시지 추출
-        messages = thread_data.get("messages", [])
-        if len(messages) < 2:
-            return None
-        
-        question_message = messages[0]
-        answer_message = messages[1]
-        
-        # GPT를 사용하여 질문과 답변의 품질 검증 및 정제
-        prompt = f"""
-        다음 슬랙 스레드의 질문과 답변을 분석하여 유의미한 Q&A로 정제해주세요:
-        
-        질문: {question_message.get('text', '')}
-        답변: {answer_message.get('text', '')}
-        
-        다음 JSON 형식으로 응답해주세요:
-        ```json
-        {{
-            "is_valuable": true/false,  // 문서화할 가치가 있는지 여부
-            "question": "정제된 질문",
-            "answer": "정제된 답변",
-            "keywords": ["키워드1", "키워드2", ...]  // 관련 키워드
-        }}
-        ```
-        
-        JSON 형식만 응답해주세요. 다른 텍스트는 포함하지 마세요.
-        """
-        
-        response = await self.client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            response_format={"type": "json_object"}
-        )
-        
-        try:
-            result = response.choices[0].message.content
-            parsed_result = json.loads(result)
-            
-            if not parsed_result.get("is_valuable", False):
-                return None
-                
-            return {
-                "type": SemanticType.QA,
-                "question": parsed_result["question"],
-                "answer": parsed_result["answer"],
-                "keywords": parsed_result["keywords"],
-                "source": {
-                    "type": "slack_thread",
-                    "channel": thread_data["channel"],
-                    "thread_ts": thread_data.get("thread_ts", ""),
-                    "questioner": question_message.get("username", "Unknown"),
-                    "answerer": answer_message.get("username", "Unknown")
-                }
-            }
-        except (json.JSONDecodeError, KeyError) as e:
-            print(f"JSON 파싱 오류: {e}")
-            return None
-    
-    async def _extract_insights(self, thread_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """
-        스레드에서 인사이트 추출
-        
-        Args:
-            thread_data: 스레드 데이터
-            
-        Returns:
-            추출된 인사이트 목록
-        """
-        # 스레드 내 모든 메시지의 텍스트 추출
-        messages = thread_data.get("messages", [])
-        thread_content = "\n".join([msg.get("text", "") for msg in messages])
-        
-        prompt = f"""
-        다음 슬랙 스레드에서 유의미한 인사이트를 추출해주세요:
-        
-        내용:
-        {thread_content}
-        
-        다음 JSON 형식으로 응답해주세요:
-        ```json
-        {{
-            "insights": [
-                {{
-                    "type": "insight", // "insight", "feedback", "reference" 중 하나
-                    "content": "인사이트 내용",
-                    "keywords": ["키워드1", "키워드2", ...],
-                    "reference_type": "링크" // type이 "reference"인 경우에만 필요
-                }},
-                // 더 많은 인사이트...
-            ]
-        }}
-        ```
-        
-        인사이트가 없다면 빈 배열을 반환하세요. JSON 형식만 응답해주세요.
-        """
-        
-        response = await self.client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            response_format={"type": "json_object"}
-        )
-        
-        try:
-            result = response.choices[0].message.content
-            parsed_result = json.loads(result)
-            
-            insights = []
-            for insight_data in parsed_result.get("insights", []):
-                insight_type = insight_data.get("type", "").lower()
-                
-                if insight_type == "insight":
-                    semantic_type = SemanticType.INSIGHT
-                elif insight_type == "feedback":
-                    semantic_type = SemanticType.FEEDBACK
-                elif insight_type == "reference":
-                    semantic_type = SemanticType.REFERENCE
-                else:
-                    # 기본값은 인사이트로 설정
-                    semantic_type = SemanticType.INSIGHT
-                
-                insight = {
-                    "type": semantic_type,
-                    "content": insight_data.get("content", ""),
-                    "keywords": insight_data.get("keywords", []),
-                    "source": {
-                        "type": "slack_thread",
-                        "channel": thread_data.get("channel", ""),
-                        "thread_ts": thread_data.get("thread_ts", "")
-                    }
-                }
-                
-                # 참조 타입인 경우 reference_type 추가
-                if semantic_type == SemanticType.REFERENCE and "reference_type" in insight_data:
-                    insight["reference_type"] = insight_data["reference_type"]
-                
-                insights.append(insight)
-            
-            return insights
-        except (json.JSONDecodeError, KeyError) as e:
-            print(f"JSON 파싱 오류: {e}")
-            return [] 
+        return semantic_data 
