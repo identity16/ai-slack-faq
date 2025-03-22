@@ -6,7 +6,8 @@ import time
 from typing import Callable, Coroutine
 
 # 각 모듈 임포트
-from src.raw_data import SlackCollector, NotionCollector
+from src.raw_data.collectors.slack import SlackCollector
+from src.raw_data.collectors.notion import NotionCollector
 from src.semantic_data import (
     SemanticType,
     SlackExtractor, NotionExtractor
@@ -23,6 +24,8 @@ if "semantic_data" not in st.session_state:
     st.session_state.semantic_data = None
 if "generated_document" not in st.session_state:
     st.session_state.generated_document = None
+if "progress" not in st.session_state:
+    st.session_state.progress = {"current": 0, "total": 0, "message": ""}
 
 # 비동기 함수를 동기적으로 실행하는 헬퍼 함수
 def run_async(coro_func: Callable[..., Coroutine], *args, **kwargs):
@@ -40,6 +43,115 @@ def run_async(coro_func: Callable[..., Coroutine], *args, **kwargs):
     async def wrapper():
         return await coro_func(*args, **kwargs)
     return asyncio.run(wrapper())
+
+# 슬랙 데이터 수집 진행 상황을 업데이트하는 콜백 함수
+async def progress_callback(current, total, message=""):
+    """
+    슬랙 데이터 수집 진행 상황을 업데이트하는 콜백 함수
+    
+    Args:
+        current: 현재까지 수집한 항목 수
+        total: 총 수집할 항목 수
+        message: 표시할 메시지 (선택 사항)
+    """
+    print(f"[PROGRESS_CALLBACK] current={current}, total={total}, message={message}")
+    st.session_state.progress["current"] = current
+    st.session_state.progress["total"] = total
+    st.session_state.progress["message"] = message
+
+# 슬랙 데이터 수집 함수 (프로그레스 바 업데이트 포함)
+async def collect_slack_data(collector, channel_id, days, progress_bar, progress_text):
+    """
+    슬랙 데이터를 수집하고 진행 상황을 업데이트하는 함수
+    
+    Args:
+        collector: SlackCollector 인스턴스
+        channel_id: 슬랙 채널 ID
+        days: 검색 기간 (일)
+        progress_bar: Streamlit 프로그레스 바 객체
+        progress_text: Streamlit 텍스트 객체
+    
+    Returns:
+        수집된 슬랙 데이터
+    """
+    # 별도의 업데이트 태스크 생성
+    update_task = None
+    
+    # 데이터 수집 시작 (프로그레스 콜백 함수 전달)
+    try:
+        # 업데이트 태스크 시작
+        async def update_progress():
+            print("[DEBUG] 진행 상황 업데이트 태스크 시작")
+            try:
+                while True:
+                    # 진행 상황 가져오기
+                    current = st.session_state.progress["current"]
+                    total = st.session_state.progress["total"]
+                    message = st.session_state.progress["message"]
+                    
+                    # 콘솔에 현재 진행 상황 출력
+                    print(f"[UPDATE_PROGRESS] current={current}, total={total}, message={message}")
+                    
+                    # 프로그레스 바 업데이트
+                    if total > 0:
+                        progress = current / total
+                        progress_bar.progress(min(progress, 1.0))
+                        
+                        status_text = f"진행 중: {current} / {total} 항목"
+                        if message:
+                            status_text += f" - {message}"
+                        progress_text.text(status_text)
+                        
+                        # 디버그 로그
+                        print(f"[UPDATE_PROGRESS] 프로그레스 바 업데이트: {progress:.2f}, 텍스트: {status_text}")
+                        
+                        # 모든 항목을 수집했으면 종료
+                        if current >= total and total > 0:
+                            print("[UPDATE_PROGRESS] 모든 항목 처리 완료, 업데이트 태스크 종료")
+                            break
+                    
+                    # 짧은 간격으로 업데이트 체크
+                    await asyncio.sleep(0.5)
+            
+            except Exception as e:
+                print(f"[ERROR] 프로그레스 업데이트 중 오류 발생: {str(e)}")
+                import traceback
+                print(traceback.format_exc())
+        
+        # 업데이트 태스크 시작
+        update_task = asyncio.create_task(update_progress())
+        
+        print("[DEBUG] SlackCollector.collect 호출 시작")
+        # 데이터 수집 (progress_callback 전달)
+        raw_data = await collector.collect(channel_id, days, progress_callback=progress_callback)
+        print("[DEBUG] SlackCollector.collect 호출 완료")
+        
+        return raw_data
+    
+    finally:
+        # 업데이트 태스크가 실행 중이면 완료 대기
+        if update_task:
+            try:
+                print("[DEBUG] 업데이트 태스크 완료 대기")
+                # 짧은 시간 대기 후 취소 (이미 종료되었을 수 있음)
+                await asyncio.sleep(1)
+                if not update_task.done():
+                    update_task.cancel()
+                    try:
+                        await update_task
+                    except asyncio.CancelledError:
+                        pass
+                print("[DEBUG] 업데이트 태스크 정리 완료")
+            except Exception as e:
+                print(f"[ERROR] 업데이트 태스크 정리 중 오류: {str(e)}")
+        
+        # 완료 상태 표시
+        progress_bar.progress(1.0)
+        if st.session_state.progress["total"] > 0:
+            progress_text.text(f"완료: {st.session_state.progress['total']} / {st.session_state.progress['total']} 항목")
+        else:
+            progress_text.text("완료: 처리할 항목이 없습니다.")
+        print("[DEBUG] 최종 상태 업데이트 완료")
 
 # 헤더
 st.title("Log2Doc Playground")
@@ -67,16 +179,46 @@ with tab1:
             days = st.number_input("검색 기간 (일)", min_value=1, max_value=30, value=3)
             
             if st.button("Slack 데이터 수집"):
+                # 진행 상황 초기화
+                st.session_state.progress = {"current": 0, "total": 0, "message": ""}
+                
+                # 진행 상황 표시 컴포넌트
+                progress_container = st.container()
+                with progress_container:
+                    progress_text = st.empty()
+                    progress_bar = st.progress(0)
+                    progress_text.text("슬랙 데이터 수집 준비 중...")
+                
                 with st.spinner("Slack에서 데이터를 수집하는 중..."):
-                    # config 딕셔너리를 사용하여 SlackCollector 초기화
-                    collector = SlackCollector(config={"slack_token": slack_token})
-                    
                     try:
-                        # SlackCollector.collect를 호출하여 데이터 수집
-                        st.session_state.raw_data = run_async(collector.collect, channel_id, days)
-                        st.success(f"Slack 데이터 수집 완료!")
+                        # config 딕셔너리를 사용하여 SlackCollector 초기화
+                        collector = SlackCollector(config={"slack_token": slack_token})
+                        
+                        print(f"[DEBUG] 슬랙 데이터 수집 시작: 채널={channel_id}, 기간={days}일")
+                        
+                        # 데이터 수집 및 진행 상황 업데이트 함수 호출
+                        st.session_state.raw_data = run_async(
+                            collect_slack_data,
+                            collector,
+                            channel_id,
+                            days,
+                            progress_bar,
+                            progress_text
+                        )
+                        
+                        # 수집된 항목 수 계산
+                        collected_count = len(st.session_state.raw_data) if isinstance(st.session_state.raw_data, list) else 0
+                        
+                        print(f"[DEBUG] 슬랙 데이터 수집 완료: {collected_count}개 스레드 수집")
+                        st.success(f"Slack 데이터 수집 완료! 총 {collected_count}개 스레드를 수집했습니다.")
                     except Exception as e:
+                        print(f"[ERROR] 데이터 수집 오류: {str(e)}")
+                        import traceback
+                        print(traceback.format_exc())
                         st.error(f"데이터 수집 오류: {str(e)}")
+                    finally:
+                        # 완료 메시지 표시를 위한 짧은 대기
+                        time.sleep(1)
                 
         elif collector_type == "Notion":
             st.subheader("Notion 설정")

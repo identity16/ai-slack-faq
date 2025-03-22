@@ -5,7 +5,7 @@ Slack Raw Data Collector
 """
 
 import os
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Callable, Optional
 from datetime import datetime, timedelta
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
@@ -127,19 +127,23 @@ class SlackCollector:
             print(traceback.format_exc())
             raise
 
-    async def collect(self, channel_name: str, days: int = 7) -> List[Dict[str, Any]]:
+    async def collect(self, channel_name: str, days: int = 7, progress_callback: Optional[Callable] = None) -> List[Dict[str, Any]]:
         """
         최근 N일 동안의 스레드 데이터 수집
         
         Args:
             channel_name: 채널 이름 (# 제외)
             days: 검색할 일자 (기본값: 7)
+            progress_callback: 진행 상황을 업데이트하는 콜백 함수 (선택 사항)
+                               function(current, total, message) 형태로 호출됨
             
         Returns:
             수집된 스레드 목록
         """
         try:
             print(f"[DEBUG] SlackCollector.collect 시작: 채널={channel_name}, 기간={days}일")
+            print(f"[DEBUG] progress_callback 존재 여부: {progress_callback is not None}")
+            
             channel_id = await self._run_sync(self.get_channel_id, channel_name)
             if not channel_id:
                 print(f"채널을 찾을 수 없습니다: {channel_name}")
@@ -164,12 +168,33 @@ class SlackCollector:
                 messages = result["messages"]
                 threaded_messages = [msg for msg in messages if msg.get("thread_ts")]
                 
-                print(f"총 {len(threaded_messages)}개의 스레드를 처리합니다.")
+                total_threads = len(threaded_messages)
+                print(f"총 {total_threads}개의 스레드를 처리합니다.")
+                
+                # 진행 상황 초기화
+                if progress_callback:
+                    try:
+                        print(f"[DEBUG] 초기 진행 상황 콜백 호출 (0/{total_threads})")
+                        await progress_callback(0, total_threads, "스레드 검색 완료, 데이터 수집 시작")
+                        print(f"[DEBUG] 초기 진행 상황 콜백 완료")
+                    except Exception as e:
+                        print(f"[ERROR] 진행 상황 콜백 호출 중 오류 발생: {str(e)}")
+                        import traceback
+                        print(traceback.format_exc())
                 
                 # 각 스레드의 답변 수집
                 for i, msg in enumerate(threaded_messages, 1):
                     thread_ts = msg.get("thread_ts")
-                    print(f"[DEBUG] 스레드 처리 {i}/{len(threaded_messages)}: {thread_ts}")
+                    print(f"[DEBUG] 스레드 처리 {i}/{total_threads}: {thread_ts}")
+                    
+                    # 진행 상황 업데이트
+                    if progress_callback:
+                        try:
+                            print(f"[DEBUG] 스레드 처리 전 진행 상황 콜백 호출 ({i-1}/{total_threads})")
+                            await progress_callback(i - 1, total_threads, f"스레드 {i}/{total_threads} 처리 중")
+                            print(f"[DEBUG] 스레드 처리 전 진행 상황 콜백 완료")
+                        except Exception as e:
+                            print(f"[ERROR] 진행 상황 콜백 호출 중 오류 발생: {str(e)}")
                     
                     try:
                         print(f"[DEBUG] conversations_replies API 호출 시작: {thread_ts}")
@@ -194,7 +219,26 @@ class SlackCollector:
                     except SlackApiError as e:
                         print(f"스레드 {thread_ts} 가져오기 실패: {e}")
                     
-                    print(f"스레드 처리 중: {i}/{len(threaded_messages)}", end="\r")
+                    print(f"스레드 처리 중: {i}/{total_threads}", end="\r")
+                    
+                    # 진행 상황 업데이트
+                    if progress_callback:
+                        try:
+                            print(f"[DEBUG] 스레드 처리 후 진행 상황 콜백 호출 ({i}/{total_threads})")
+                            await progress_callback(i, total_threads, f"스레드 {i}/{total_threads} 처리 완료")
+                            print(f"[DEBUG] 스레드 처리 후 진행 상황 콜백 완료")
+                        except Exception as e:
+                            print(f"[ERROR] 진행 상황 콜백 호출 중 오류 발생: {str(e)}")
+                
+                # 최종 진행 상황 업데이트
+                if progress_callback:
+                    try:
+                        collected_threads = len(threads)
+                        print(f"[DEBUG] 최종 진행 상황 콜백 호출 ({total_threads}/{total_threads})")
+                        await progress_callback(total_threads, total_threads, f"총 {collected_threads}개의 유효한 스레드 수집 완료")
+                        print(f"[DEBUG] 최종 진행 상황 콜백 완료")
+                    except Exception as e:
+                        print(f"[ERROR] 진행 상황 콜백 호출 중 오류 발생: {str(e)}")
                 
                 print(f"\n총 {len(threads)}개의 유효한 스레드를 수집했습니다.")
                 print(f"[DEBUG] SlackCollector.collect 완료")
