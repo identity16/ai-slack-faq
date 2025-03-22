@@ -204,27 +204,97 @@ class MarkdownGenerator(DocumentGenerator):
     
     async def _generate_glossary(self, semantic_data: List[Dict[str, Any]]) -> str:
         """용어집 생성"""
-        references = [d for d in semantic_data if d["type"] == "reference"]
+        # 기존: 참조 데이터를 사용하여 용어집 생성
+        # references = [d for d in semantic_data if d["type"] == "reference"]
         
-        # 알파벳 순으로 정렬
-        references.sort(key=lambda x: x["content"].lower())
+        # 수정: GLOSSARY 타입의 데이터를 사용하여 용어집 생성
+        glossary_items = [d for d in semantic_data if d["type"] == "glossary"]
+        
+        if not glossary_items:
+            # GLOSSARY 타입 데이터가 없으면 참조 데이터로 대체
+            glossary_items = [d for d in semantic_data if d["type"] == "reference"]
+        
+        # 용어 이름 기준으로 알파벳순 정렬
+        glossary_items.sort(key=lambda x: x.get("term", x.get("content", "")).lower())
         
         lines = [
             "# 용어집",
-            f"\n_마지막 업데이트: {datetime.now().strftime('%Y-%m-%d %H:%M')}_\n"
+            f"\n_마지막 업데이트: {datetime.now().strftime('%Y-%m-%d %H:%M')}_\n",
+            "\n용어와 정의를 알파벳순으로 정리한 문서입니다.\n"
         ]
         
         current_letter = None
-        for ref in references:
-            first_letter = ref["content"][0].upper()
+        for item in glossary_items:
+            # 용어가 term 필드에 있거나 content 필드에 있을 수 있음
+            term = item.get("term", item.get("content", ""))
+            if not term:
+                continue
+                
+            # 첫 글자 추출 (한글, 영문, 숫자 등 모두 고려)
+            first_letter = term[0].upper()
+            
+            # 한글인 경우 자음으로 분류
+            if '가' <= first_letter <= '힣':
+                consonant = self._get_korean_consonant(first_letter)
+                first_letter = consonant
+            
+            # 숫자인 경우 '#'으로 분류
+            if '0' <= first_letter <= '9':
+                first_letter = '#'
+            
+            # 특수문자인 경우 '_'로 분류
+            if not first_letter.isalnum():
+                first_letter = '_'
+            
+            # 새로운 문자로 시작하는 섹션 추가
             if first_letter != current_letter:
                 current_letter = first_letter
                 lines.append(f"\n## {current_letter}\n")
             
-            lines.append(f"### {ref['content']}\n")
-            if "description" in ref:
-                lines.append(f"{ref['description']}\n")
-            if "keywords" in ref:
-                lines.append(f"관련 키워드: {', '.join(ref['keywords'])}\n")
+            # 용어와 정의 추가
+            definition = item.get("definition", item.get("description", ""))
+            confidence = item.get("confidence", "")
+            
+            lines.append(f"### {term}\n")
+            
+            if definition:
+                lines.append(f"{definition}\n")
+            
+            # 대안적 정의가 있는 경우 추가
+            if "alternative_definitions" in item and item["alternative_definitions"]:
+                lines.append("\n대안적 정의:")
+                for idx, alt_def in enumerate(item["alternative_definitions"], 1):
+                    lines.append(f"{idx}. {alt_def}")
+                lines.append("")
+            
+            # 키워드 추가
+            if "keywords" in item and item["keywords"]:
+                lines.append(f"**관련 키워드**: {', '.join(item['keywords'])}\n")
+            
+            # 도메인 힌트 추가
+            if "domain_hint" in item and item["domain_hint"]:
+                lines.append(f"**관련 도메인**: {item['domain_hint']}\n")
+            
+            # 검토 필요 여부 표시
+            if item.get("needs_review", False):
+                lines.append(f"*이 용어의 정의는 검토가 필요합니다.*\n")
         
-        return "\n".join(lines) 
+        return "\n".join(lines)
+    
+    def _get_korean_consonant(self, char: str) -> str:
+        """한글 문자에서 초성 추출"""
+        if not '가' <= char <= '힣':
+            return char
+            
+        # 한글 유니코드 계산
+        code = ord(char) - ord('가')
+        
+        # 초성 추출 (19개의 초성)
+        consonants = [
+            'ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 
+            'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'
+        ]
+        
+        # 초성 인덱스 계산 (각 초성마다 21*28개의 조합이 있음)
+        consonant_index = code // (21 * 28)
+        return consonants[consonant_index] 

@@ -39,6 +39,33 @@
             color: #7f8c8d;
             font-size: 0.9em;
         }
+        .term-metadata {
+            margin-top: 10px;
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+        .confidence-high {
+            color: #27ae60;
+        }
+        .confidence-medium {
+            color: #f39c12;
+        }
+        .confidence-low {
+            color: #e74c3c;
+        }
+        .needs-review {
+            background-color: #ffeaa7;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 0.8em;
+        }
+        .alternative-definitions {
+            margin-top: 15px;
+            margin-left: 20px;
+            border-left: 3px solid #e0e0e0;
+            padding-left: 15px;
+            font-size: 0.95em;
+        }
         .alphabet-index {
             position: sticky;
             top: 0;
@@ -64,38 +91,72 @@
             font-style: italic;
             color: #7f8c8d;
         }
+        .domain-hint {
+            display: inline-block;
+            background-color: #e8f4fc;
+            color: #3498db;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            margin-left: 5px;
+        }
     </style>
 </head>
 <body>
     <h1>{{ title }}</h1>
     <p class="updated">마지막 업데이트: {{ updated_at }}</p>
 
-    <!-- 알파벳 인덱스 -->
+    <!-- 알파벳/초성 인덱스 -->
     <div class="alphabet-index">
-        {% for letter in groups.keys()|sort %}
+        {% for letter in groups.keys() %}
             <a href="#{{ letter }}">{{ letter }}</a>
         {% endfor %}
     </div>
 
     <!-- 용어집 내용 -->
     {% if groups %}
-        {% for letter, terms in groups.items()|sort %}
+        {% for letter, terms in groups.items() %}
             <h2 id="{{ letter }}">{{ letter }}</h2>
             {% for term in terms %}
                 <div class="term-container">
-                    <h3>{{ term.content }}</h3>
+                    <h3>
+                        {{ term.term }}
+                        {% if term.needs_review %}
+                            <span class="needs-review">검토 필요</span>
+                        {% endif %}
+                        {% if term.domain_hint %}
+                            <span class="domain-hint">{{ term.domain_hint }}</span>
+                        {% endif %}
+                    </h3>
                     <div class="term-description">
-                        {% if term.description %}
-                            {{ term.description }}
+                        {% if term.definition %}
+                            {{ term.definition }}
                         {% else %}
                             <p>설명이 추가되지 않았습니다.</p>
                         {% endif %}
                     </div>
+                    
+                    {% if term.alternative_definitions %}
+                        <div class="alternative-definitions">
+                            <strong>다른 정의:</strong>
+                            <ul>
+                                {% for alt_def in term.alternative_definitions %}
+                                    <li>{{ alt_def }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+                    
                     {% if term.keywords %}
                         <div class="term-keywords">
                             <strong>관련 키워드:</strong> {{ term.keywords|join(', ') }}
                         </div>
                     {% endif %}
+                    
+                    <div class="term-metadata">
+                        <strong>신뢰도:</strong> 
+                        <span class="confidence-{{ term.confidence }}">{{ term.confidence }}</span>
+                    </div>
                 </div>
             {% endfor %}
         {% endfor %}

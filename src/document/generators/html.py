@@ -156,22 +156,105 @@ class HTMLGenerator(DocumentGenerator):
     
     async def _generate_glossary(self, semantic_data: List[Dict[str, Any]]) -> str:
         """용어집 생성"""
-        references = [d for d in semantic_data if d["type"] == "reference"]
+        # 수정: GLOSSARY 타입의 데이터를 사용하여 용어집 생성
+        glossary_items = [d for d in semantic_data if d["type"] == "glossary"]
         
-        # 알파벳 순으로 정렬
-        references.sort(key=lambda x: x["content"].lower())
+        if not glossary_items:
+            # GLOSSARY 타입 데이터가 없으면 참조 데이터로 대체
+            glossary_items = [d for d in semantic_data if d["type"] == "reference"]
         
-        # 알파벳별로 그룹화
+        # 표준화된 아이템 구조로 변환
+        normalized_items = []
+        for item in glossary_items:
+            normalized_item = {
+                "term": item.get("term", item.get("content", "")),
+                "definition": item.get("definition", item.get("description", "")),
+                "confidence": item.get("confidence", "high"),
+                "needs_review": item.get("needs_review", False),
+                "keywords": item.get("keywords", []),
+                "domain_hint": item.get("domain_hint", ""),
+                "alternative_definitions": item.get("alternative_definitions", []),
+                "source": item.get("source", {})
+            }
+            
+            if normalized_item["term"]:  # 용어가 비어있지 않은 경우만 추가
+                normalized_items.append(normalized_item)
+        
+        # 용어 이름 기준으로 정렬
+        normalized_items.sort(key=lambda x: x["term"].lower())
+        
+        # 알파벳/초성별로 그룹화
         groups = {}
-        for ref in references:
-            first_letter = ref["content"][0].upper()
-            if first_letter not in groups:
-                groups[first_letter] = []
-            groups[first_letter].append(ref)
+        for item in normalized_items:
+            # 첫 글자 추출
+            first_char = item["term"][0].upper() if item["term"] else ""
+            
+            # 한글인 경우 자음으로 분류
+            if '가' <= first_char <= '힣':
+                first_char = self._get_korean_consonant(first_char)
+            
+            # 숫자인 경우 '#'으로 분류
+            elif '0' <= first_char <= '9':
+                first_char = '#'
+            
+            # 특수문자인 경우 '_'로 분류
+            elif not first_char.isalnum():
+                first_char = '_'
+            
+            if first_char not in groups:
+                groups[first_char] = []
+            
+            groups[first_char].append(item)
+        
+        # 그룹 키를 정렬 (숫자, 알파벳, 한글 초성 순)
+        sorted_keys = sorted(groups.keys(), key=self._sort_key)
+        sorted_groups = {k: groups[k] for k in sorted_keys}
         
         template = self.env.get_template("glossary.html")
         return template.render(
             title="용어집",
             updated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
-            groups=groups
-        ) 
+            groups=sorted_groups
+        )
+    
+    def _get_korean_consonant(self, char: str) -> str:
+        """한글 문자에서 초성 추출"""
+        if not '가' <= char <= '힣':
+            return char
+            
+        # 한글 유니코드 계산
+        code = ord(char) - ord('가')
+        
+        # 초성 추출 (19개의 초성)
+        consonants = [
+            'ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 
+            'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'
+        ]
+        
+        # 초성 인덱스 계산 (각 초성마다 21*28개의 조합이 있음)
+        consonant_index = code // (21 * 28)
+        return consonants[consonant_index]
+    
+    def _sort_key(self, key: str) -> tuple:
+        """정렬 키 생성 (숫자, 영문, 한글 초성 순)"""
+        # 숫자는 가장 앞에
+        if key == '#':
+            return (0, key)
+        # 영문은 다음
+        elif 'A' <= key <= 'Z':
+            return (1, key)
+        # 특수문자
+        elif key == '_':
+            return (2, key)
+        # 한글 초성은 그 다음
+        elif key in ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 
+                      'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ']:
+            # 초성 순서에 따라 정렬
+            consonants = [
+                'ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 
+                'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'
+            ]
+            return (3, consonants.index(key))
+        # 그 외
+        else:
+            return (4, key) 
