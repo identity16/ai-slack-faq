@@ -14,7 +14,7 @@ from src.semantic_data import (
 from src.document import DocumentType, MarkdownGenerator
 
 # 페이지 설정
-st.set_page_config(page_title="AI Slack FAQ Playground", layout="wide")
+st.set_page_config(page_title="Log2Doc Playground", layout="wide")
 
 # 세션 상태 초기화
 if "raw_data" not in st.session_state:
@@ -42,7 +42,7 @@ def run_async(coro_func: Callable[..., Coroutine], *args, **kwargs):
     return asyncio.run(wrapper())
 
 # 헤더
-st.title("AI Slack FAQ Playground")
+st.title("Log2Doc Playground")
 st.markdown("각 데이터 처리 단계를 독립적으로 시뮬레이션할 수 있는 Playground입니다.")
 
 # 탭 생성
@@ -296,4 +296,4 @@ with tab3:
 
 # 푸터
 st.markdown("---")
-st.markdown("AI Slack FAQ Playground © 2024") 
+st.markdown("Log2Doc Playground © 2024") 

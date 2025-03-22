@@ -1,4 +1,4 @@
-# AI Slack FAQ Playground
+# Log2Doc Playground
 
 Streamlit 기반 Playground 어플리케이션으로, FAQ 생성 파이프라인의 각 단계를 독립적으로 시뮬레이션할 수 있습니다.
 
