@@ -8,6 +8,7 @@ import os
 import re
 from typing import Dict, Any, List
 from notion_client import Client
+from datetime import datetime
 
 class NotionCollector:
     """
@@ -75,8 +76,16 @@ class NotionCollector:
                 "title": self._get_page_title(page),
                 "created_time": page["created_time"],
                 "last_edited_time": page["last_edited_time"],
-                "sections": self._process_blocks(blocks["results"]),
-                "raw_content": blocks
+                "blocks": self._process_blocks(blocks["results"]),
+                "parent": {
+                    "type": page.get("parent", {}).get("type", ""),
+                    "id": page.get("parent", {}).get(page.get("parent", {}).get("type", ""), "")
+                },
+                "url": page.get("url", ""),
+                "properties": page.get("properties", {}),
+                "metadata": {
+                    "collection_timestamp": datetime.now().isoformat()
+                }
             }
             
             return document
@@ -109,27 +118,83 @@ class NotionCollector:
             blocks: 블록 목록
             
         Returns:
-            처리된 섹션 목록
+            처리된 블록 목록
         """
-        sections = []
-        current_section = None
+        processed_blocks = []
         
         for block in blocks:
             block_type = block["type"]
+            block_id = block["id"]
             
-            if block_type == "heading_1" or block_type == "heading_2":
-                if current_section:
-                    sections.append(current_section)
-                current_section = {
-                    "title": block[block_type]["rich_text"][0]["plain_text"] if block[block_type]["rich_text"] else "",
-                    "content": []
-                }
-            elif current_section is not None and block_type == "paragraph":
-                text = "".join([rt["plain_text"] for rt in block["paragraph"]["rich_text"]])
-                if text.strip():
-                    current_section["content"].append(text)
+            processed_block = {
+                "id": block_id,
+                "type": block_type,
+                "created_time": block.get("created_time", ""),
+                "last_edited_time": block.get("last_edited_time", "")
+            }
+            
+            # 블록 타입별 컨텐츠 추출
+            if block_type in ["paragraph", "heading_1", "heading_2", "heading_3", "bulleted_list_item", "numbered_list_item"]:
+                rich_text = block[block_type].get("rich_text", [])
+                processed_block["text"] = "".join([rt["plain_text"] for rt in rich_text]) if rich_text else ""
+                processed_block["annotations"] = [rt.get("annotations", {}) for rt in rich_text] if rich_text else []
+            elif block_type == "image":
+                processed_block["url"] = block["image"].get("file", {}).get("url", "") or block["image"].get("external", {}).get("url", "")
+                caption = block["image"].get("caption", [])
+                processed_block["caption"] = "".join([rt["plain_text"] for rt in caption]) if caption else ""
+            elif block_type == "code":
+                rich_text = block["code"].get("rich_text", [])
+                processed_block["text"] = "".join([rt["plain_text"] for rt in rich_text]) if rich_text else ""
+                processed_block["language"] = block["code"].get("language", "")
+            elif block_type == "table":
+                processed_block["table_width"] = block["table"].get("table_width", 0)
+                processed_block["has_column_header"] = block["table"].get("has_column_header", False)
+                processed_block["has_row_header"] = block["table"].get("has_row_header", False)
+                
+                # 테이블 행 가져오기 (별도 API 호출 필요)
+                try:
+                    table_rows = self.client.blocks.children.list(block_id)
+                    processed_block["rows"] = self._process_table_rows(table_rows.get("results", []))
+                except Exception as e:
+                    print(f"테이블 행 가져오기 실패: {e}")
+                    processed_block["rows"] = []
+            
+            # 하위 블록 처리 (재귀적으로 수행)
+            if block.get("has_children", False) and block_type != "table":
+                try:
+                    children = self.client.blocks.children.list(block_id)
+                    processed_block["children"] = self._process_blocks(children.get("results", []))
+                except Exception as e:
+                    print(f"하위 블록 가져오기 실패: {e}")
+                    processed_block["children"] = []
+            
+            processed_blocks.append(processed_block)
+            
+        return processed_blocks
+    
+    def _process_table_rows(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        테이블 행 데이터 처리
         
-        if current_section:
-            sections.append(current_section)
+        Args:
+            rows: 테이블 행 블록 목록
             
-        return sections 
+        Returns:
+            처리된 테이블 행 목록
+        """
+        processed_rows = []
+        
+        for row in rows:
+            if row["type"] != "table_row":
+                continue
+                
+            cells = row["table_row"]["cells"]
+            processed_cells = []
+            
+            for cell in cells:
+                cell_text = "".join([rt["plain_text"] for rt in cell]) if cell else ""
+                processed_cells.append(cell_text)
+                
+            processed_rows.append(processed_cells)
+            
+        return processed_rows 

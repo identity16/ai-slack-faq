@@ -67,15 +67,16 @@ class SlackExtractor(SemanticExtractor):
             if progress_callback:
                 progress_callback(i, total)
                 
-            # Q&A 추출
-            if "question" in thread and "answer" in thread:
+            # 스레드에 메시지가 있는지 확인
+            if "messages" in thread and len(thread["messages"]) >= 2:
+                # Q&A 추출
                 qa_data = await self._extract_qa(thread)
                 if qa_data:
                     semantic_data.append(qa_data)
-            
-            # 인사이트 추출
-            insights = await self._extract_insights(thread)
-            semantic_data.extend(insights)
+                
+                # 인사이트 추출
+                insights = await self._extract_insights(thread)
+                semantic_data.extend(insights)
         
         # 최종 진행 상황 업데이트
         if progress_callback:
@@ -93,12 +94,20 @@ class SlackExtractor(SemanticExtractor):
         Returns:
             Q&A 시맨틱 데이터
         """
+        # 메시지 목록에서 첫 번째 메시지와 두 번째 메시지 추출
+        messages = thread_data.get("messages", [])
+        if len(messages) < 2:
+            return None
+        
+        question_message = messages[0]
+        answer_message = messages[1]
+        
         # GPT를 사용하여 질문과 답변의 품질 검증 및 정제
         prompt = f"""
         다음 슬랙 스레드의 질문과 답변을 분석하여 유의미한 Q&A로 정제해주세요:
         
-        질문: {thread_data['question']}
-        답변: {thread_data['answer']}
+        질문: {question_message.get('text', '')}
+        답변: {answer_message.get('text', '')}
         
         다음 JSON 형식으로 응답해주세요:
         ```json
@@ -135,9 +144,9 @@ class SlackExtractor(SemanticExtractor):
                 "source": {
                     "type": "slack_thread",
                     "channel": thread_data["channel"],
-                    "timestamp": thread_data["timestamp"],
-                    "questioner": thread_data["questioner"],
-                    "answerer": thread_data["answerer"]
+                    "thread_ts": thread_data.get("thread_ts", ""),
+                    "questioner": question_message.get("username", "Unknown"),
+                    "answerer": answer_message.get("username", "Unknown")
                 }
             }
         except (json.JSONDecodeError, KeyError) as e:
@@ -154,12 +163,15 @@ class SlackExtractor(SemanticExtractor):
         Returns:
             추출된 인사이트 목록
         """
+        # 스레드 내 모든 메시지의 텍스트 추출
+        messages = thread_data.get("messages", [])
+        thread_content = "\n".join([msg.get("text", "") for msg in messages])
+        
         prompt = f"""
         다음 슬랙 스레드에서 유의미한 인사이트를 추출해주세요:
         
         내용:
-        {thread_data.get('question', '')}
-        {thread_data.get('answer', '')}
+        {thread_content}
         
         다음 JSON 형식으로 응답해주세요:
         ```json
@@ -211,7 +223,7 @@ class SlackExtractor(SemanticExtractor):
                     "source": {
                         "type": "slack_thread",
                         "channel": thread_data.get("channel", ""),
-                        "timestamp": thread_data.get("timestamp", "")
+                        "thread_ts": thread_data.get("thread_ts", "")
                     }
                 }
                 

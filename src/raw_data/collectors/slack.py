@@ -221,22 +221,26 @@ class SlackCollector:
         Returns:
             구조화된 스레드 정보
         """
-        # 원본 메시지 (질문)
-        question = messages[0]["text"]
-        answer = messages[1]["text"]
+        # 스레드 내 모든 메시지를 객관적인 형태로 보존
+        thread_messages = []
         
-        # 사용자 정보 조회
-        questioner = self._get_username(messages[0].get("user", "Unknown"))
-        answerer = self._get_username(messages[1].get("user", "Unknown"))
+        for message in messages:
+            user_id = message.get("user", "Unknown")
+            username = self._get_username(user_id)
+            
+            thread_messages.append({
+                "text": message.get("text", ""),
+                "user_id": user_id,
+                "username": username,
+                "ts": message.get("ts", ""),
+                "datetime": datetime.fromtimestamp(float(message.get("ts", 0))).strftime("%Y-%m-%d %H:%M")
+            })
         
         return {
             "channel": channel_name,
-            "question": question,
-            "answer": answer,
-            "questioner": questioner,
-            "answerer": answerer,
-            "timestamp": float(thread_ts),
+            "thread_ts": thread_ts,
             "datetime": datetime.fromtimestamp(float(thread_ts)).strftime("%Y-%m-%d %H:%M"),
+            "messages": thread_messages,
             "type": "slack_thread"
         }
     
