@@ -29,7 +29,7 @@ install:
 # 프로그램 실행
 run:
 	PYTHONPATH=$(VENV)/lib/python3.11/site-packages \
-	$(PYTHON) main.py
+	$(PYTHON) -m streamlit run playground.py
 
 # 청소
 clean:
@@ -59,4 +59,4 @@ env-copy:
 # 린팅
 lint:
 	$(PIP) install pylint
-	$(VENV)/bin/pylint main.py 
+	$(VENV)/bin/pylint playground.py 

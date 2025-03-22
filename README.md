@@ -45,18 +45,8 @@ cp .env.example .env
 
 ### 실행
 ```bash
-# 개발 서버 실행
-python app.py
-
-# CLI로 문서 생성
-python main.py faq --channel [채널명] --days [일자]
-python main.py guide --doc_id [노션문서ID]
-
-# 용어집 생성
-python main.py glossary  # 예제 데이터로 용어집 생성
-python main.py glossary --source slack --channel [채널명] --days [일자]  # 슬랙 데이터로 용어집 생성
-python main.py glossary --source notion --doc_id [노션문서ID]  # 노션 데이터로 용어집 생성
-python main.py glossary --format html  # HTML 형식으로 용어집 생성
+# Streamlit 앱 실행
+streamlit run playground.py
 ```
 
 ## 프로젝트 구조
@@ -70,14 +60,14 @@ python main.py glossary --format html  # HTML 형식으로 용어집 생성
 ├── resources/         # 설정 파일 및 리소스
 ├── results/          # 생성된 문서 저장
 ├── tests/           # 테스트 코드
-├── app.py          # 메인 애플리케이션
+├── playground.py    # Streamlit 애플리케이션
 ├── requirements.txt # 의존성 목록
 └── .env           # 환경 변수
 ```
 
 ## 기술 스택
 
-- **백엔드**: Python, Flask/FastAPI
+- **백엔드**: Python, Streamlit
 - **데이터베이스**: SQLite
 - **AI/ML**: OpenAI GPT API
 - **문서 생성**: Markdown/HTML
