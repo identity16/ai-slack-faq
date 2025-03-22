@@ -184,7 +184,7 @@ class SlackCollector:
                             print(f"[DEBUG] 스레드 처리 시작: {thread_ts}")
                             thread_info = await self._run_sync(
                                 self._process_thread,
-                                channel_name=channel_name,
+                                channel_id=channel_id,
                                 messages=replies["messages"],
                                 thread_ts=thread_ts
                             )
@@ -209,7 +209,7 @@ class SlackCollector:
             print(traceback.format_exc())
             return []
 
-    def _process_thread(self, channel_name: str, messages: List[Dict], thread_ts: str) -> Dict[str, Any]:
+    def _process_thread(self, channel_id: str, messages: List[Dict], thread_ts: str) -> Dict[str, Any]:
         """
         스레드 메시지를 처리하여 구조화된 데이터로 변환
         
@@ -228,16 +228,28 @@ class SlackCollector:
             user_id = message.get("user", "Unknown")
             username = self._get_username(user_id)
             
+            # 각 메시지의 permalink 가져오기
+            try:
+                permalink_result = self.client.chat_getPermalink(
+                    channel=channel_id,
+                    message_ts=message.get("ts", "")
+                )
+                permalink = permalink_result.get("permalink", "")
+            except Exception as e:
+                print(f"Permalink 가져오기 실패: {e}")
+                permalink = ""
+            
             thread_messages.append({
                 "text": message.get("text", ""),
                 "user_id": user_id,
                 "username": username,
                 "ts": message.get("ts", ""),
-                "datetime": datetime.fromtimestamp(float(message.get("ts", 0))).strftime("%Y-%m-%d %H:%M")
+                "datetime": datetime.fromtimestamp(float(message.get("ts", 0))).strftime("%Y-%m-%d %H:%M"),
+                "permalink": permalink
             })
         
         return {
-            "channel": channel_name,
+            "channel": channel_id,
             "thread_ts": thread_ts,
             "datetime": datetime.fromtimestamp(float(thread_ts)).strftime("%Y-%m-%d %H:%M"),
             "messages": thread_messages,
