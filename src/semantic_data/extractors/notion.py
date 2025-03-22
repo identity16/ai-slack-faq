@@ -95,6 +95,11 @@ class NotionExtractor(SemanticExtractor):
                 if "references" in self.prompt_templates:
                     references = await self.prompt_templates["references"].process(context_data)
                     semantic_data.extend(references)
+                
+                # 용어집 추출
+                if "glossary" in self.prompt_templates:
+                    glossary_items = await self.prompt_templates["glossary"].process(context_data)
+                    semantic_data.extend(glossary_items)
         
         # 최종 진행 상황 업데이트
         if progress_callback:

@@ -67,7 +67,7 @@ class SlackExtractor(SemanticExtractor):
                 
             # 스레드에 메시지가 있는지 확인
             if "messages" in thread and len(thread["messages"]) >= 2:
-                # QA 프롬프트 템플릿 처리
+                # QnA 프롬프트 템플릿 처리
                 if "qna" in self.prompt_templates:
                     qa_results = await self.prompt_templates["qna"].process(thread)
                     semantic_data.extend(qa_results)
@@ -76,6 +76,11 @@ class SlackExtractor(SemanticExtractor):
                 if "insights" in self.prompt_templates:
                     insights_results = await self.prompt_templates["insights"].process(thread)
                     semantic_data.extend(insights_results)
+                
+                # 용어집 프롬프트 템플릿 처리
+                if "glossary" in self.prompt_templates:
+                    glossary_results = await self.prompt_templates["glossary"].process(thread)
+                    semantic_data.extend(glossary_results)
         
         # 최종 진행 상황 업데이트
         if progress_callback:

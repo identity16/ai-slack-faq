@@ -14,6 +14,7 @@ class SemanticType:
     FEEDBACK = "feedback"        # 피드백
     REFERENCE = "reference"      # 참조 정보
     INSTRUCTION = "instruction"  # 작업 지침
+    GLOSSARY = "glossary"        # 용어집
 
 class SemanticPromptTemplate(Protocol):
     """시맨틱 데이터 추출 프롬프트 템플릿 프로토콜"""
@@ -96,7 +97,12 @@ class SemanticStore(ABC):
 from .extractors.slack import SlackExtractor
 from .extractors.notion import NotionExtractor
 from .store.sqlite import SQLiteStore
-from .core import LLMClient, PromptTemplateFactory
+from .core import (
+    LLMClient, 
+    PromptTemplateFactory, 
+    GlossaryEnhancementPromptTemplate, 
+    enhance_low_confidence_terms
+)
 
 __all__ = [
     'SemanticType',
@@ -107,5 +113,7 @@ __all__ = [
     'NotionExtractor',
     'SQLiteStore',
     'LLMClient',
-    'PromptTemplateFactory'
+    'PromptTemplateFactory',
+    'GlossaryEnhancementPromptTemplate',
+    'enhance_low_confidence_terms'
 ] 
