@@ -10,7 +10,7 @@ import asyncio
 from typing import Dict, Any, List
 
 from src.document import DocumentGenerator, DocumentType
-from src.document.generators import MarkdownGenerator, HTMLGenerator
+from src.document.generators import MarkdownGenerator
 from src.semantic_data import LLMClient, SlackExtractor, SemanticType
 from src.semantic_data import enhance_low_confidence_terms
 
@@ -67,23 +67,16 @@ async def main():
     enhanced_glossary = await enhance_low_confidence_terms(glossary_items, llm_client)
     
     # 문서 생성기 초기화
-    md_generator = MarkdownGenerator()
-    html_generator = HTMLGenerator()
+    generator = MarkdownGenerator()
     
     # 마크다운 문서 생성 및 저장
-    md_content = await md_generator.generate(enhanced_glossary, DocumentType.GLOSSARY)
+    md_content = await generator.generate(enhanced_glossary, DocumentType.GLOSSARY)
     md_path = "examples/output/glossary.md"
     os.makedirs(os.path.dirname(md_path), exist_ok=True)
-    await md_generator.save(md_content, md_path)
-    
-    # HTML 문서 생성 및 저장
-    html_content = await html_generator.generate(enhanced_glossary, DocumentType.GLOSSARY)
-    html_path = "examples/output/glossary.html"
-    await html_generator.save(html_content, html_path)
+    await generator.save(md_content, md_path)
     
     print(f"생성된 파일:")
     print(f"- {md_path}")
-    print(f"- {html_path}")
 
 
 if __name__ == "__main__":

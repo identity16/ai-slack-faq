@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 from src.raw_data import SlackCollector, NotionCollector
 from src.semantic_data import SemanticType, SlackExtractor, NotionExtractor, SQLiteStore
-from src.document import DocumentType, MarkdownGenerator, HTMLGenerator
+from src.document import DocumentType, MarkdownGenerator
 
 # 환경 변수 로드
 load_dotenv(override=True)
@@ -100,7 +100,7 @@ async def generate_slack_faq(
 
         # 3. Document 생성
         print("\nFAQ 문서를 생성하는 중...")
-        generator = MarkdownGenerator() if output_format == "markdown" else HTMLGenerator()
+        generator = MarkdownGenerator()
         print(f"[DEBUG] DocumentGenerator 인스턴스 생성 완료: {type(generator).__name__}")
         
         try:
@@ -179,7 +179,7 @@ async def generate_notion_guide(
 
         # 3. Document 생성
         print("\n가이드 문서를 생성하는 중...")
-        generator = MarkdownGenerator() if output_format == "markdown" else HTMLGenerator()
+        generator = MarkdownGenerator()
         content = await generator.generate(semantic_data, DocumentType.GUIDE)
 
         # 결과 저장
@@ -378,7 +378,7 @@ async def generate_glossary(
 
         # 3. Document 생성
         print("\n용어집 문서를 생성하는 중...")
-        generator = MarkdownGenerator() if output_format == "markdown" else HTMLGenerator()
+        generator = MarkdownGenerator()
         content = await generator.generate(semantic_data, DocumentType.GLOSSARY)
 
         # 결과 저장

@@ -43,11 +43,9 @@ class DocumentGenerator(ABC):
         pass
 
 from .generators.markdown import MarkdownGenerator
-from .generators.html import HTMLGenerator
 
 __all__ = [
     'DocumentType',
     'DocumentGenerator',
-    'MarkdownGenerator',
-    'HTMLGenerator'
+    'MarkdownGenerator'
 ] 

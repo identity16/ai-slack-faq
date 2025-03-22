@@ -11,10 +11,7 @@ from src.semantic_data import (
     SemanticType,
     SlackExtractor, NotionExtractor
 )
-from src.document import (
-    DocumentType,
-    MarkdownGenerator, HTMLGenerator
-)
+from src.document import DocumentType, MarkdownGenerator
 
 # 페이지 설정
 st.set_page_config(page_title="AI Slack FAQ Playground", layout="wide")
@@ -232,11 +229,6 @@ with tab3:
     col1, col2 = st.columns(2)
     
     with col1:
-        generator_type = st.selectbox(
-            "문서 생성기 선택",
-            ["Markdown", "HTML"]
-        )
-        
         doc_type = st.selectbox(
             "문서 유형",
             [getattr(DocumentType, t) for t in dir(DocumentType) if not t.startswith("__") and t.isupper()]
@@ -270,10 +262,7 @@ with tab3:
         if semantic_data_input and st.button("문서 생성"):
             with st.spinner("문서를 생성하는 중..."):
                 try:
-                    if generator_type == "Markdown":
-                        generator = MarkdownGenerator()
-                    else:
-                        generator = HTMLGenerator()
+                    generator = MarkdownGenerator()
                     
                     # generate 메서드 호출 수정
                     document_content = run_async(generator.generate, semantic_data_input, doc_type)
@@ -282,8 +271,7 @@ with tab3:
                     # 문서 저장 (옵션)
                     if output_path:
                         os.makedirs(output_path, exist_ok=True)
-                        extension = ".md" if generator_type == "Markdown" else ".html"
-                        filename = f"{output_path}/{doc_type}_{int(time.time())}{extension}"
+                        filename = f"{output_path}/{doc_type}_{int(time.time())}.md"
                         run_async(generator.save, document_content, filename)
                         st.success(f"문서를 {filename}에 저장했습니다!")
                     
@@ -294,18 +282,14 @@ with tab3:
     with col2:
         st.subheader("생성된 문서")
         if st.session_state.generated_document:
-            if generator_type == "Markdown":
-                st.markdown(st.session_state.generated_document)
-            else:
-                st.components.v1.html(st.session_state.generated_document, height=600)
+            st.markdown(st.session_state.generated_document)
             
             # 다운로드 버튼
-            extension = ".md" if generator_type == "Markdown" else ".html"
             st.download_button(
-                label=f"{extension[1:].upper()} 다운로드",
+                label="Markdown 다운로드",
                 data=st.session_state.generated_document,
-                file_name=f"document{extension}",
-                mime="text/plain" if generator_type == "Markdown" else "text/html"
+                file_name=f"document.md",
+                mime="text/plain"
             )
         else:
             st.info("문서를 생성하려면 왼쪽에서 설정을 완료하고 생성 버튼을 클릭하세요.")

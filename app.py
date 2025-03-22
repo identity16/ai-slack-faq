@@ -15,7 +15,7 @@ import asyncio
 
 from src.raw_data import SlackCollector, NotionCollector
 from src.semantic_data import SemanticType, SlackExtractor, NotionExtractor, SQLiteStore
-from src.document import DocumentType, MarkdownGenerator, HTMLGenerator
+from src.document import DocumentType, MarkdownGenerator
 
 # 환경 변수 로드
 from dotenv import load_dotenv
@@ -133,10 +133,7 @@ def save_and_display_result(document: Dict[str, Any]) -> None:
     
     # 생성된 문서 표시
     st.subheader("생성된 문서:")
-    if document["format"] == "markdown":
-        st.markdown(document["content"])
-    else:
-        st.components.v1.html(document["content"], height=600)
+    st.markdown(document["content"])
 
 async def generate_slack_faq() -> None:
     """슬랙 FAQ 생성 페이지"""
@@ -419,7 +416,7 @@ async def generate_notion_guide() -> None:
                 status_text.info("가이드 문서를 생성하는 중...")
                 doc_status.info("🔄 문서 생성기 초기화 및 가이드 생성 중...")
                 print("[DEBUG] 문서 생성기 초기화")
-                generator = MarkdownGenerator() if output_format == "Markdown" else HTMLGenerator()
+                generator = MarkdownGenerator() if output_format == "Markdown" else MarkdownGenerator()
                 print("[DEBUG] 문서 생성 시작")
                 content = await generator.generate(semantic_data, DocumentType.GUIDE)
                 print("[DEBUG] 문서 생성 완료")
@@ -430,7 +427,7 @@ async def generate_notion_guide() -> None:
                 status_text.info("결과를 저장하고 표시하는 중...")
                 print("[DEBUG] 결과 저장 시작")
                 today = datetime.now().strftime("%Y%m%d")
-                extension = ".md" if output_format == "Markdown" else ".html"
+                extension = ".md" if output_format == "Markdown" else ".md"
                 output_file = f"guide_{today}{extension}"
                 output_path = RESULTS_DIR / output_file
                 
@@ -441,10 +438,7 @@ async def generate_notion_guide() -> None:
                 
                 # 생성된 문서 표시
                 st.subheader("생성된 문서:")
-                if output_format == "Markdown":
-                    st.markdown(content)
-                else:
-                    st.components.v1.html(content, height=600)
+                st.markdown(content)
                 
                 # 최종 완료 표시
                 progress_bar.progress(100)
@@ -789,7 +783,7 @@ async def generate_glossary() -> None:
                 status_text.info("용어집 문서를 생성하는 중...")
                 doc_status.info("🔄 문서 생성기 초기화 및 용어집 생성 중...")
                 print("[DEBUG] 문서 생성기 초기화")
-                generator = MarkdownGenerator() if output_format == "markdown" else HTMLGenerator()
+                generator = MarkdownGenerator() if output_format == "markdown" else MarkdownGenerator()
                 print("[DEBUG] 문서 생성 시작")
                 content = await generator.generate(
                     semantic_data,
@@ -809,7 +803,7 @@ async def generate_glossary() -> None:
                 elif data_source == "노션":
                     source_name = "notion"
                 
-                extension = ".md" if output_format == "markdown" else ".html"
+                extension = ".md" if output_format == "markdown" else ".md"
                 output_file = f"glossary_{source_name}_{today}{extension}"
                 output_path = RESULTS_DIR / output_file
                 
@@ -820,10 +814,7 @@ async def generate_glossary() -> None:
                 
                 # 생성된 문서 표시
                 st.subheader("생성된 문서:")
-                if output_format == "markdown":
-                    st.markdown(content)
-                else:
-                    st.components.v1.html(content, height=600)
+                st.markdown(content)
                 
                 # 최종 완료 표시
                 progress_bar.progress(100)
