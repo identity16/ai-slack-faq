@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ title }}</title>
+    <title>용어집</title>
     <style>
         body {
             font-family: 'Noto Sans KR', Arial, sans-serif;
@@ -15,153 +15,299 @@
         }
         h1 {
             color: #2c3e50;
-            border-bottom: 2px solid #eee;
+            border-bottom: 2px solid #3498db;
             padding-bottom: 10px;
         }
         h2 {
-            color: #3498db;
+            color: #2980b9;
             margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
         }
         h3 {
-            color: #2980b9;
+            color: #3498db;
+            margin-top: 25px;
+        }
+        h4 {
+            color: #16a085;
             margin-top: 20px;
+            margin-bottom: 5px;
         }
         .term-container {
             margin-bottom: 30px;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #f9f9f9;
         }
-        .term-description {
-            margin-left: 20px;
+        .term-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
-        .term-keywords {
-            margin-top: 10px;
-            color: #7f8c8d;
-            font-size: 0.9em;
+        .term-title {
+            font-weight: 600;
+            font-size: 1.2em;
+            color: #2c3e50;
         }
-        .term-metadata {
-            margin-top: 10px;
-            color: #7f8c8d;
-            font-size: 0.9em;
+        .term-company-specific {
+            background-color: #e8f4f8;
+            border-left: 4px solid #3498db;
+        }
+        .term-general {
+            background-color: #f8f9fa;
+            border-left: 4px solid #7f8c8d;
+        }
+        .term-confidence {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin-left: 10px;
         }
         .confidence-high {
+            background-color: #e6f7e6;
             color: #27ae60;
         }
         .confidence-medium {
+            background-color: #fef9e6;
             color: #f39c12;
         }
         .confidence-low {
+            background-color: #fde8e8;
             color: #e74c3c;
         }
         .needs-review {
-            background-color: #ffeaa7;
-            padding: 2px 5px;
-            border-radius: 3px;
+            background-color: #fde8e8;
+            color: #e74c3c;
+            padding: 2px 8px;
+            border-radius: 12px;
             font-size: 0.8em;
+            margin-left: 10px;
+        }
+        .definition {
+            margin-top: 10px;
+            margin-bottom: 10px;
         }
         .alternative-definitions {
-            margin-top: 15px;
-            margin-left: 20px;
-            border-left: 3px solid #e0e0e0;
+            margin-top: 10px;
+            background-color: #f4f6f7;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .alternative-title {
+            font-weight: 600;
+            color: #7f8c8d;
+        }
+        .alt-def-item {
+            margin-top: 5px;
             padding-left: 15px;
-            font-size: 0.95em;
         }
-        .alphabet-index {
-            position: sticky;
-            top: 0;
-            background-color: #f8f9fa;
-            padding: 10px 0;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #eee;
-        }
-        .alphabet-index a {
-            margin: 0 5px;
-            text-decoration: none;
-            color: #3498db;
-        }
-        .alphabet-index a:hover {
-            text-decoration: underline;
-        }
-        .updated {
-            font-style: italic;
-            color: #7f8c8d;
-            margin-bottom: 20px;
-        }
-        .no-terms {
-            font-style: italic;
+        .metadata {
+            margin-top: 10px;
+            font-size: 0.9em;
             color: #7f8c8d;
         }
-        .domain-hint {
+        .keywords, .domain-hints {
             display: inline-block;
-            background-color: #e8f4fc;
-            color: #3498db;
-            padding: 2px 5px;
-            border-radius: 3px;
+            margin-right: 15px;
+        }
+        .keyword, .domain-hint {
+            display: inline-block;
+            background-color: #ecf0f1;
+            padding: 2px 8px;
+            margin: 2px;
+            border-radius: 12px;
             font-size: 0.8em;
-            margin-left: 5px;
+        }
+        .toc {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .toc-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .toc-section {
+            margin-bottom: 10px;
+        }
+        .toc-items {
+            display: flex;
+            flex-wrap: wrap;
+        }
+        .toc-item {
+            margin-right: 15px;
+            margin-bottom: 5px;
+        }
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 0.8em;
+            color: #7f8c8d;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+        }
+        a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
 <body>
-    <h1>{{ title }}</h1>
-    <p class="updated">마지막 업데이트: {{ updated_at }}</p>
-
-    <!-- 알파벳/초성 인덱스 -->
-    <div class="alphabet-index">
-        {% for letter in groups.keys() %}
-            <a href="#{{ letter }}">{{ letter }}</a>
-        {% endfor %}
-    </div>
-
-    <!-- 용어집 내용 -->
-    {% if groups %}
-        {% for letter, terms in groups.items() %}
-            <h2 id="{{ letter }}">{{ letter }}</h2>
-            {% for term in terms %}
-                <div class="term-container">
-                    <h3>
-                        {{ term.term }}
-                        {% if term.needs_review %}
-                            <span class="needs-review">검토 필요</span>
-                        {% endif %}
-                        {% if term.domain_hint %}
-                            <span class="domain-hint">{{ term.domain_hint }}</span>
-                        {% endif %}
-                    </h3>
-                    <div class="term-description">
-                        {% if term.definition %}
-                            {{ term.definition }}
-                        {% else %}
-                            <p>설명이 추가되지 않았습니다.</p>
-                        {% endif %}
-                    </div>
-                    
-                    {% if term.alternative_definitions %}
-                        <div class="alternative-definitions">
-                            <strong>다른 정의:</strong>
-                            <ul>
-                                {% for alt_def in term.alternative_definitions %}
-                                    <li>{{ alt_def }}</li>
-                                {% endfor %}
-                            </ul>
-                        </div>
-                    {% endif %}
-                    
-                    {% if term.keywords %}
-                        <div class="term-keywords">
-                            <strong>관련 키워드:</strong> {{ term.keywords|join(', ') }}
-                        </div>
-                    {% endif %}
-                    
-                    <div class="term-metadata">
-                        <strong>신뢰도:</strong> 
-                        <span class="confidence-{{ term.confidence }}">{{ term.confidence }}</span>
-                    </div>
+    <h1>용어집</h1>
+    <p class="footer">생성 시간: {{ generation_time }}</p>
+    
+    <!-- 목차 -->
+    <div class="toc">
+        <div class="toc-title">목차</div>
+        
+        {% if company_terms %}
+        <div class="toc-section">
+            <a href="#company-specific">회사 특화 용어</a>
+        </div>
+        {% endif %}
+        
+        {% if general_terms %}
+        <div class="toc-section">
+            <a href="#general">일반 용어</a>
+            <div class="toc-items">
+                {% for group_key, items in groups.items() %}
+                {% if items|selectattr('term_type', 'equalto', 'general')|list %}
+                <div class="toc-item">
+                    <a href="#{{ group_key }}">{{ group_key }}</a>
                 </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- 회사 특화 용어 섹션 -->
+    {% if company_terms %}
+    <h2 id="company-specific">회사 특화 용어</h2>
+    <p>회사나 팀 내부에서 특별한 의미로 사용되는 용어들입니다.</p>
+    
+    {% for term in company_terms %}
+    <div class="term-container term-company-specific">
+        <div class="term-header">
+            <span class="term-title">{{ term.term }}</span>
+            <div>
+                {% if term.confidence %}
+                <span class="term-confidence confidence-{{ term.confidence }}">
+                    {{ {'high': '높음', 'medium': '중간', 'low': '낮음'}.get(term.confidence, term.confidence) }}
+                </span>
+                {% endif %}
+                
+                {% if term.needs_review %}
+                <span class="needs-review">검토 필요</span>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="definition">{{ term.definition }}</div>
+        
+        {% if term.alternative_definitions %}
+        <div class="alternative-definitions">
+            <div class="alternative-title">대체 정의:</div>
+            {% for alt_def in term.alternative_definitions %}
+            <div class="alt-def-item">{{ loop.index }}. {{ alt_def }}</div>
             {% endfor %}
-        {% endfor %}
-    {% else %}
-        <p class="no-terms">등록된 용어가 없습니다.</p>
+        </div>
+        {% endif %}
+        
+        <div class="metadata">
+            {% if term.keywords %}
+            <div class="keywords">
+                <strong>키워드:</strong>
+                {% for keyword in term.keywords %}
+                <span class="keyword">{{ keyword }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            {% if term.domain_hints %}
+            <div class="domain-hints">
+                <strong>관련 분야:</strong>
+                {% for hint in term.domain_hints %}
+                <span class="domain-hint">{{ hint }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
     {% endif %}
+    
+    <!-- 일반 용어 섹션 -->
+    {% if general_terms %}
+    <h2 id="general">일반 용어</h2>
+    <p>일반적으로 산업이나 기술 분야에서 통용되는 용어들입니다.</p>
+    
+    {% for group_key, items in groups.items() %}
+    {% set filtered_items = items|selectattr('term_type', 'equalto', 'general')|list %}
+    {% if filtered_items %}
+    <h3 id="{{ group_key }}">{{ group_key }}</h3>
+    
+    {% for term in filtered_items %}
+    <div class="term-container term-general">
+        <div class="term-header">
+            <span class="term-title">{{ term.term }}</span>
+            <div>
+                {% if term.confidence %}
+                <span class="term-confidence confidence-{{ term.confidence }}">
+                    {{ {'high': '높음', 'medium': '중간', 'low': '낮음'}.get(term.confidence, term.confidence) }}
+                </span>
+                {% endif %}
+                
+                {% if term.needs_review %}
+                <span class="needs-review">검토 필요</span>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="definition">{{ term.definition }}</div>
+        
+        {% if term.alternative_definitions %}
+        <div class="alternative-definitions">
+            <div class="alternative-title">대체 정의:</div>
+            {% for alt_def in term.alternative_definitions %}
+            <div class="alt-def-item">{{ loop.index }}. {{ alt_def }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        <div class="metadata">
+            {% if term.keywords %}
+            <div class="keywords">
+                <strong>키워드:</strong>
+                {% for keyword in term.keywords %}
+                <span class="keyword">{{ keyword }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            {% if term.domain_hints %}
+            <div class="domain-hints">
+                <strong>관련 분야:</strong>
+                {% for hint in term.domain_hints %}
+                <span class="domain-hint">{{ hint }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+    
+    <div class="footer">
+        © {{ generation_time.split('-')[0] }} 용어집 문서가 자동으로 생성되었습니다.
+    </div>
 </body>
 </html> 

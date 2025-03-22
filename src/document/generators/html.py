@@ -155,106 +155,105 @@ class HTMLGenerator(DocumentGenerator):
         )
     
     async def _generate_glossary(self, semantic_data: List[Dict[str, Any]]) -> str:
-        """용어집 생성"""
-        # 수정: GLOSSARY 타입의 데이터를 사용하여 용어집 생성
-        glossary_items = [d for d in semantic_data if d["type"] == "glossary"]
+        """
+        용어집 생성
+        
+        Args:
+            semantic_data: 의미 데이터 목록
+            
+        Returns:
+            HTML 형식의 용어집
+        """
+        # 용어집 데이터 필터링
+        glossary_items = [item for item in semantic_data if item["type"] == "glossary"]
+        
+        # 용어집 항목이 없으면 참조 데이터 사용
+        if not glossary_items:
+            glossary_items = [item for item in semantic_data if item["type"] == "reference"]
         
         if not glossary_items:
-            # GLOSSARY 타입 데이터가 없으면 참조 데이터로 대체
-            glossary_items = [d for d in semantic_data if d["type"] == "reference"]
+            return self.env.get_template("glossary_empty.html").render()
         
-        # 표준화된 아이템 구조로 변환
+        # 정규화된 항목 생성
         normalized_items = []
         for item in glossary_items:
+            term = item.get("term") or item.get("content", "")
+            if not term:
+                continue
+                
             normalized_item = {
-                "term": item.get("term", item.get("content", "")),
-                "definition": item.get("definition", item.get("description", "")),
-                "confidence": item.get("confidence", "high"),
+                "term": term,
+                "definition": item.get("definition", ""),
+                "term_type": item.get("term_type", "etc"),
+                "confidence": item.get("confidence", ""),
                 "needs_review": item.get("needs_review", False),
-                "keywords": item.get("keywords", []),
-                "domain_hint": item.get("domain_hint", ""),
                 "alternative_definitions": item.get("alternative_definitions", []),
-                "source": item.get("source", {})
+                "keywords": item.get("keywords", []),
+                "domain_hints": item.get("domain_hints", [])
             }
-            
-            if normalized_item["term"]:  # 용어가 비어있지 않은 경우만 추가
-                normalized_items.append(normalized_item)
+            normalized_items.append(normalized_item)
         
-        # 용어 이름 기준으로 정렬
-        normalized_items.sort(key=lambda x: x["term"].lower())
+        # 용어 정렬
+        sorted_items = sorted(normalized_items, key=lambda x: x["term"].lower())
         
-        # 알파벳/초성별로 그룹화
+        # 첫 글자 기준으로 그룹화
         groups = {}
-        for item in normalized_items:
-            # 첫 글자 추출
-            first_char = item["term"][0].upper() if item["term"] else ""
+        korean_consonants = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ']
+        
+        for item in sorted_items:
+            term = item["term"]
+            first_char = term[0]
             
-            # 한글인 경우 자음으로 분류
+            # 한글인 경우 초성 추출
             if '가' <= first_char <= '힣':
-                first_char = self._get_korean_consonant(first_char)
+                char_code = ord(first_char) - ord('가')
+                consonant_index = char_code // 588
+                consonant = korean_consonants[consonant_index]
+                group_key = consonant
+            elif first_char.isalpha():
+                group_key = first_char.upper()
+            elif first_char.isdigit():
+                group_key = '0-9'
+            else:
+                group_key = '#'
             
-            # 숫자인 경우 '#'으로 분류
-            elif '0' <= first_char <= '9':
-                first_char = '#'
-            
-            # 특수문자인 경우 '_'로 분류
-            elif not first_char.isalnum():
-                first_char = '_'
-            
-            if first_char not in groups:
-                groups[first_char] = []
-            
-            groups[first_char].append(item)
+            if group_key not in groups:
+                groups[group_key] = []
+            groups[group_key].append(item)
         
-        # 그룹 키를 정렬 (숫자, 알파벳, 한글 초성 순)
-        sorted_keys = sorted(groups.keys(), key=self._sort_key)
-        sorted_groups = {k: groups[k] for k in sorted_keys}
+        # 그룹 정렬
+        sorted_groups = {}
         
-        template = self.env.get_template("glossary.html")
-        return template.render(
-            title="용어집",
-            updated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
-            groups=sorted_groups
-        )
-    
-    def _get_korean_consonant(self, char: str) -> str:
-        """한글 문자에서 초성 추출"""
-        if not '가' <= char <= '힣':
-            return char
-            
-        # 한글 유니코드 계산
-        code = ord(char) - ord('가')
+        # 한글 초성 먼저
+        for consonant in korean_consonants:
+            if consonant in groups:
+                sorted_groups[consonant] = groups[consonant]
         
-        # 초성 추출 (19개의 초성)
-        consonants = [
-            'ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 
-            'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'
-        ]
+        # 영문 알파벳
+        for char in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':
+            if char in groups:
+                sorted_groups[char] = groups[char]
         
-        # 초성 인덱스 계산 (각 초성마다 21*28개의 조합이 있음)
-        consonant_index = code // (21 * 28)
-        return consonants[consonant_index]
-    
-    def _sort_key(self, key: str) -> tuple:
-        """정렬 키 생성 (숫자, 영문, 한글 초성 순)"""
-        # 숫자는 가장 앞에
-        if key == '#':
-            return (0, key)
-        # 영문은 다음
-        elif 'A' <= key <= 'Z':
-            return (1, key)
-        # 특수문자
-        elif key == '_':
-            return (2, key)
-        # 한글 초성은 그 다음
-        elif key in ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 
-                      'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ']:
-            # 초성 순서에 따라 정렬
-            consonants = [
-                'ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 
-                'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'
-            ]
-            return (3, consonants.index(key))
-        # 그 외
-        else:
-            return (4, key) 
+        # 숫자와 특수문자
+        if '0-9' in groups:
+            sorted_groups['0-9'] = groups['0-9']
+        if '#' in groups:
+            sorted_groups['#'] = groups['#']
+        
+        # 템플릿 렌더링
+        # 서비스, 개발, 디자인, 마케팅, 기타 등등 분리
+        service_terms = [item for item in sorted_items if item["term_type"] == "service"]
+        development_terms = [item for item in sorted_items if item["term_type"] == "development"]
+        design_terms = [item for item in sorted_items if item["term_type"] == "design"]
+        marketing_terms = [item for item in sorted_items if item["term_type"] == "marketing"]
+        etc_terms = [item for item in sorted_items if item["term_type"] == "etc"]
+        
+        return self.env.get_template("glossary.html").render(
+            groups=sorted_groups,
+            service_terms=service_terms,
+            development_terms=development_terms,
+            design_terms=design_terms,
+            marketing_terms=marketing_terms,
+            etc_terms=etc_terms,
+            generation_time=datetime.now().strftime("%Y-%m-%d %H:%M")
+        ) 

@@ -501,8 +501,9 @@ class SlackGlossaryPromptTemplate(SemanticPromptTemplate):
                 {{
                     "term": "용어",
                     "definition": "용어에 대한 정의",
-                    "confidence": "high/medium/low",  // 정의에 대한 확신도
-                    "needs_review": true/false,       // 전문가 검토 필요 여부
+                    "term_type": "service/development/design/marketing/etc",  // 서비스, 개발, 디자인, 마케팅, 기타 등등
+                    "confidence": "high/medium/low",         // 정의에 대한 확신도
+                    "needs_review": true/false,              // 전문가 검토 필요 여부
                     "keywords": ["키워드1", "키워드2", ...]
                 }},
                 // 더 많은 용어...
@@ -513,14 +514,21 @@ class SlackGlossaryPromptTemplate(SemanticPromptTemplate):
         용어 정의에 대한 가이드라인:
         1. 'term'은 도메인 전문 용어, 약어, 중요 개념 등을 포함합니다.
         2. 'definition'은 명확하고 간결하게 용어를 설명합니다.
-        3. 'confidence'는 정의의 확신도를 나타냅니다:
+        3. 'term_type'은 다음과 같이 구분합니다:
+           - service: 서비스 용어
+           - development: 개발 용어
+           - design: 디자인 용어
+           - marketing: 마케팅 용어
+           - etc: 기타 용어
+        4. 'confidence'는 정의의 확신도를 나타냅니다:
            - high: 명확히 정의된 경우
            - medium: 맥락에서 유추 가능한 경우
            - low: 불확실하거나 추정한 경우
-        4. 'needs_review'는 전문가 검토가 필요한지 여부입니다:
+        5. 'needs_review'는 전문가 검토가 필요한지 여부입니다:
            - true: 정의가 불확실하거나 추가 검증이 필요한 경우
            - false: 정의가 신뢰할 수 있는 경우
         
+        서비스 용어에 중점을 두고 추출하되, 맥락상 중요한 개발, 디자인, 마케팅 용어도 포함해주세요.
         용어를 찾을 수 없으면 빈 배열을 반환하세요. JSON 형식만 응답해주세요.
         """
         
@@ -532,6 +540,7 @@ class SlackGlossaryPromptTemplate(SemanticPromptTemplate):
                 "type": SemanticType.GLOSSARY,
                 "term": item.get("term", ""),
                 "definition": item.get("definition", ""),
+                "term_type": item.get("term_type", "etc"),
                 "confidence": item.get("confidence", "low"),
                 "needs_review": item.get("needs_review", True),
                 "keywords": item.get("keywords", []),
@@ -562,43 +571,25 @@ class NotionGlossaryPromptTemplate(SemanticPromptTemplate):
     
     async def process(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        노션 섹션에서 용어 정의 데이터 처리
+        노션 페이지에서 용어 정의 데이터 처리
         
         Args:
-            data: 섹션과 문서 데이터를 포함한 딕셔너리
-                - section: 섹션 데이터
-                - document: 원본 문서 데이터
+            data: 페이지 데이터
             
         Returns:
             추출된 용어집 데이터 목록
         """
-        section = data.get("section", {})
-        document = data.get("document", {})
-        
-        section_title = section.get('title', '')
-        section_content = ' '.join(section.get('content', []))
-        
-        # 용어집과 관련된 섹션인지 사전 확인 (최적화를 위함)
-        glossary_keywords = ["용어", "glossary", "terminology", "definition", "dictionary", "약어", "abbreviation", "term"]
-        is_likely_glossary = False
-        
-        # 제목에 용어집 관련 키워드가 있는지 확인
-        if any(keyword in section_title.lower() for keyword in glossary_keywords):
-            is_likely_glossary = True
-        # 아니면 내용에 "용어:" 또는 "정의:" 와 같은 패턴이 있는지 확인
-        elif any(f"{keyword}:" in section_content.lower() for keyword in glossary_keywords):
-            is_likely_glossary = True
-        
-        # 용어집 관련 섹션이 아니면 빈 결과 반환 (최적화)
-        if not is_likely_glossary and len(section_content) < 500:  # 짧은 섹션만 스킵
-            return []
+        # 페이지 내용 추출
+        page_content = data.get("content", "")
+        page_title = data.get("title", "")
         
         prompt = f"""
-        다음 노션 문서 섹션에서 도메인 용어와 그 정의를 추출해주세요:
+        다음 노션 페이지에서 도메인 용어와 그 정의를 추출해주세요:
         
-        제목: {section_title}
+        제목: {page_title}
+        
         내용:
-        {section_content}
+        {page_content}
         
         다음 JSON 형식으로 응답해주세요:
         ```json
@@ -607,8 +598,9 @@ class NotionGlossaryPromptTemplate(SemanticPromptTemplate):
                 {{
                     "term": "용어",
                     "definition": "용어에 대한 정의",
-                    "confidence": "high/medium/low",  // 정의에 대한 확신도
-                    "needs_review": true/false,       // 전문가 검토 필요 여부
+                    "term_type": "service/development/design/marketing/etc",  // 서비스, 개발, 디자인, 마케팅, 기타 등등
+                    "confidence": "high/medium/low",         // 정의에 대한 확신도
+                    "needs_review": true/false,              // 전문가 검토 필요 여부
                     "keywords": ["키워드1", "키워드2", ...]
                 }},
                 // 더 많은 용어...
@@ -619,14 +611,21 @@ class NotionGlossaryPromptTemplate(SemanticPromptTemplate):
         용어 정의에 대한 가이드라인:
         1. 'term'은 도메인 전문 용어, 약어, 중요 개념 등을 포함합니다.
         2. 'definition'은 명확하고 간결하게 용어를 설명합니다.
-        3. 'confidence'는 정의의 확신도를 나타냅니다:
-           - high: 문서에 명확히 정의된 경우
+        3. 'term_type'은 다음과 같이 구분합니다:
+           - service: 서비스 용어
+           - development: 개발 용어
+           - design: 디자인 용어
+           - marketing: 마케팅 용어
+           - etc: 기타 용어
+        4. 'confidence'는 정의의 확신도를 나타냅니다:
+           - high: 명확히 정의된 경우
            - medium: 맥락에서 유추 가능한 경우
            - low: 불확실하거나 추정한 경우
-        4. 'needs_review'는 전문가 검토가 필요한지 여부입니다:
+        5. 'needs_review'는 전문가 검토가 필요한지 여부입니다:
            - true: 정의가 불확실하거나 추가 검증이 필요한 경우
            - false: 정의가 신뢰할 수 있는 경우
         
+        서비스 용어에 중점을 두고 추출하되, 맥락상 중요한 개발, 디자인, 마케팅 용어도 포함해주세요.
         용어를 찾을 수 없으면 빈 배열을 반환하세요. JSON 형식만 응답해주세요.
         """
         
@@ -634,25 +633,18 @@ class NotionGlossaryPromptTemplate(SemanticPromptTemplate):
         
         glossary_items = []
         for item in result.get("glossary_items", []):
-            confidence = item.get("confidence", "low")
-            needs_review = item.get("needs_review", True)
-            
-            # 낮은 확신도 항목은 항상 검토 필요로 설정
-            if confidence == "low":
-                needs_review = True
-            
             glossary_item = {
                 "type": SemanticType.GLOSSARY,
                 "term": item.get("term", ""),
                 "definition": item.get("definition", ""),
-                "confidence": confidence,
-                "needs_review": needs_review,
+                "term_type": item.get("term_type", "etc"),
+                "confidence": item.get("confidence", "low"),
+                "needs_review": item.get("needs_review", True),
                 "keywords": item.get("keywords", []),
                 "source": {
-                    "type": "notion_document",
-                    "document_id": document.get("id", ""),
-                    "document_title": document.get("title", ""),
-                    "section_title": section_title
+                    "type": "notion_page",
+                    "page_id": data.get("page_id", ""),
+                    "title": page_title
                 }
             }
             
@@ -661,92 +653,108 @@ class NotionGlossaryPromptTemplate(SemanticPromptTemplate):
         return glossary_items
 
 
-class GlossaryEnhancementPromptTemplate(SemanticPromptTemplate):
-    """용어 정의 개선 프롬프트 템플릿"""
+class GlossaryEnhancementPromptTemplate:
+    """
+    낮은 확신도의 용어 정의를 향상시키기 위한 프롬프트 템플릿
+    """
     
-    def __init__(self, llm_client: LLMClient):
+    def __init__(self, llm_client: LLMClient) -> None:
         """
         초기화
         
         Args:
-            llm_client: LLM 클라이언트
+            llm_client: 언어 모델 클라이언트
         """
         self.llm_client = llm_client
     
-    async def process(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    async def process(self, terms_data: List[Dict[str, Any]], context: str = "") -> List[Dict[str, Any]]:
         """
-        낮은 확신도의 용어 정의를 개선
+        낮은 확신도의 용어 정의를 향상시키는 처리
         
         Args:
-            data: 용어 데이터 리스트를 포함한 딕셔너리
-                - items: 확신도가 낮은 용어 항목 리스트
-                - context: 용어가 사용된 문맥 정보
+            terms_data: 용어 데이터 목록
+            context: 추가 컨텍스트 (선택 사항)
             
         Returns:
-            개선된 용어집 데이터 목록
+            향상된 용어집 항목 목록
         """
-        items = data.get("items", [])
-        context = data.get("context", "")
+        # 입력 용어 목록 구성
+        terms_items = []
+        for item in terms_data:
+            terms_items.append({
+                "term": item.get("term", ""),
+                "definition": item.get("definition", ""),
+                "term_type": item.get("term_type", "etc"),
+                "confidence": item.get("confidence", "low"),
+                "needs_review": item.get("needs_review", True),
+                "keywords": item.get("keywords", [])
+            })
         
-        if not items:
-            return []
-        
-        # 용어 목록 구성
-        terms_list = "\n".join([f"- {item['term']}: {item['definition']} (확신도: {item['confidence']})" 
-                               for item in items])
+        terms_json = json.dumps(terms_items, ensure_ascii=False)
         
         prompt = f"""
-        다음은 도메인 용어집에서 확신도가 낮거나 추가 검토가 필요한 용어들입니다:
+        다음은 낮은 확신도로 정의된 용어 목록입니다. 이 용어들의 정의를 향상시켜주세요:
         
-        {terms_list}
+        용어 데이터:
+        {terms_json}
         
-        이 용어들이 사용된 문맥:
-        {context}
+        {f"추가 컨텍스트 정보:{os.linesep}{context}" if context else ""}
         
         각 용어에 대해 다음을 수행해주세요:
-        1. 용어의 정의를 개선하거나 명확히 합니다.
-        2. 문맥에서 추론할 수 있는 정보를 활용합니다.
-        3. 확신도를 재평가합니다.
-        4. 여전히 불확실한 경우 대안적 정의를 제시합니다.
+        1. 정의를 개선하고 보다 명확하게 작성해주세요
+        2. 주어진 컨텍스트를 활용하여 용어를 상세히 설명해주세요
+        3. 정의에 대한 확신도를 재평가해주세요 (high/medium/low)
+        4. 필요하다면 대체 정의를 제공해주세요
         
         다음 JSON 형식으로 응답해주세요:
         ```json
         {{
-            "enhanced_items": [
+            "glossary_items": [
                 {{
-                    "term": "원래 용어",
+                    "term": "용어",
                     "definition": "개선된 정의",
-                    "confidence": "medium/low",  // 재평가된 확신도
-                    "needs_review": true/false,  // 여전히 전문가 검토가 필요한지 여부
-                    "alternative_definitions": ["대안 정의 1", "대안 정의 2"],  // 가능한 다른 정의
+                    "term_type": "service/development/design/marketing/etc",
+                    "confidence": "high/medium/low",         
+                    "needs_review": true/false,              
+                    "alternative_definitions": ["대체 정의1", "대체 정의2"],
                     "keywords": ["키워드1", "키워드2", ...],
-                    "domain_hint": "추정되는 도메인 영역" // 용어가 속할 것으로 추정되는 도메인
+                    "domain_hints": ["도메인/분야"]
                 }},
                 // 더 많은 용어...
             ]
         }}
         ```
         
-        JSON 형식만 응답해주세요.
+        참고사항:
+        - 정의가 여전히 불확실한 경우, 여러 대체 정의를 제공하고 confidence를 'low'로 유지하세요
+        - 'term_type'은 용어가 서비스, 개발, 디자인, 마케팅, 기타 등등 구분합니다
+        - 기술, 산업, 또는 특정 도메인 분야의 힌트를 'domain_hints'에 포함하세요
+        
+        용어 개선에 집중하고 JSON 형식만 응답해주세요.
         """
         
         result = await self.llm_client.generate(prompt)
         
         enhanced_items = []
-        for item in result.get("enhanced_items", []):
-            original_item = next((i for i in items if i["term"] == item["term"]), {})
-            
+        for item in result.get("glossary_items", []):
             enhanced_item = {
                 "type": SemanticType.GLOSSARY,
                 "term": item.get("term", ""),
                 "definition": item.get("definition", ""),
+                "term_type": item.get("term_type", "etc"),
                 "confidence": item.get("confidence", "low"),
                 "needs_review": item.get("needs_review", True),
                 "alternative_definitions": item.get("alternative_definitions", []),
-                "keywords": item.get("keywords", original_item.get("keywords", [])),
-                "domain_hint": item.get("domain_hint", ""),
-                "source": original_item.get("source", {})
+                "keywords": item.get("keywords", []),
+                "domain_hints": item.get("domain_hints", [])
             }
+            
+            # 원본 용어의 소스 정보 보존
+            for original_item in terms_data:
+                if original_item.get("term") == enhanced_item["term"]:
+                    if "source" in original_item:
+                        enhanced_item["source"] = original_item["source"]
+                    break
             
             enhanced_items.append(enhanced_item)
         
@@ -754,57 +762,66 @@ class GlossaryEnhancementPromptTemplate(SemanticPromptTemplate):
 
 
 # 프롬프트 템플릿을 위한 유틸리티 함수
-async def enhance_low_confidence_terms(llm_client: LLMClient, glossary_items: List[Dict[str, Any]], 
-                                      context: str = "") -> List[Dict[str, Any]]:
+async def enhance_low_confidence_terms(
+    glossary_items: List[Dict[str, Any]],
+    llm_client: LLMClient,
+    context: str = "",
+    confidence_threshold: str = "medium"
+) -> List[Dict[str, Any]]:
     """
-    확신도가 낮은 용어를 개선
+    낮은 확신도의 용어를 개선합니다.
     
     Args:
+        glossary_items: 용어집 항목 목록
         llm_client: LLM 클라이언트
-        glossary_items: 확신도가 낮거나 검토가 필요한 용어 목록
-        context: 용어가 사용된 문맥 정보
+        context: 컨텍스트 정보 (선택 사항)
+        confidence_threshold: 개선이 필요한 확신도 임계값 (이 값 이하의 확신도는 개선됨)
         
     Returns:
-        개선된 용어 목록
+        개선된 용어집 항목 목록
     """
-    # 확신도가 낮거나 검토가 필요한 항목 필터링
-    low_confidence_items = [item for item in glossary_items 
-                           if item.get("confidence") == "low" or item.get("needs_review", False)]
+    # 낮은 확신도 항목 필터링
+    low_confidence_items = [
+        item for item in glossary_items 
+        if item.get("confidence") in ["low", "medium"] and item.get("confidence") <= confidence_threshold
+    ]
     
+    # 높은 확신도 항목 보존
+    high_confidence_items = [
+        item for item in glossary_items
+        if item.get("confidence") not in ["low", "medium"] or item.get("confidence") > confidence_threshold
+    ]
+    
+    # 낮은 확신도 항목이 없으면 원본 반환
     if not low_confidence_items:
         return glossary_items
     
-    enhancer = GlossaryEnhancementPromptTemplate(llm_client)
+    # 낮은 확신도 항목 처리
+    template = GlossaryEnhancementPromptTemplate(llm_client)
+    enhanced_items = await template.process(low_confidence_items, context)
     
-    # 강화 처리 수행
-    enhanced_items = await enhancer.process({
-        "items": low_confidence_items,
-        "context": context
-    })
+    # 결과 병합: 향상된 항목을 기존 항목과 병합
+    result_items = high_confidence_items.copy()
     
-    # 결과 목록 구성
-    result_items = []
-    
-    # 확신도가 높은 항목은 그대로 유지
-    high_confidence_items = [item for item in glossary_items 
-                            if item.get("confidence") != "low" and not item.get("needs_review", False)]
-    result_items.extend(high_confidence_items)
-    
-    # 개선된 항목과 원본 항목의 ID로 매핑하여 병합
-    for item in enhanced_items:
-        original_item = next((i for i in low_confidence_items if i["term"] == item["term"]), None)
-        if original_item:
-            # 확신도가 여전히 낮으면 대안 정의 추가
-            if item.get("confidence") == "low":
-                # 원본 항목과 개선된 항목 합치기
-                merged_item = {**original_item, **item}
-                result_items.append(merged_item)
-            else:
-                # 확신도가 높아졌으면 개선된 항목 사용
-                result_items.append(item)
+    for enhanced_item in enhanced_items:
+        # 동일한 용어의 기존 항목이 있는지 확인
+        existing_index = next(
+            (i for i, item in enumerate(result_items) 
+             if item.get("term") == enhanced_item.get("term")),
+            None
+        )
+        
+        # 기존 항목이 있고, 향상된 항목의 확신도가 더 높으면 교체
+        if existing_index is not None:
+            existing_confidence = result_items[existing_index].get("confidence", "low")
+            enhanced_confidence = enhanced_item.get("confidence", "low")
+            
+            confidence_levels = {"high": 3, "medium": 2, "low": 1}
+            if confidence_levels.get(enhanced_confidence, 0) > confidence_levels.get(existing_confidence, 0):
+                result_items[existing_index] = enhanced_item
         else:
-            # 새로 발견된 용어라면 추가
-            result_items.append(item)
+            # 기존 항목이 없으면 추가
+            result_items.append(enhanced_item)
     
     return result_items
 

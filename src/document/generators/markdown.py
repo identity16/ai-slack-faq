@@ -7,6 +7,7 @@ Markdown Document Generator
 import os
 from typing import Dict, Any, List
 from datetime import datetime
+import re
 
 from .. import DocumentGenerator, DocumentType
 
@@ -203,83 +204,144 @@ class MarkdownGenerator(DocumentGenerator):
         return "\n".join(lines)
     
     async def _generate_glossary(self, semantic_data: List[Dict[str, Any]]) -> str:
-        """용어집 생성"""
-        # 기존: 참조 데이터를 사용하여 용어집 생성
-        # references = [d for d in semantic_data if d["type"] == "reference"]
+        """
+        용어집 생성
         
-        # 수정: GLOSSARY 타입의 데이터를 사용하여 용어집 생성
-        glossary_items = [d for d in semantic_data if d["type"] == "glossary"]
+        Args:
+            semantic_data: 의미 데이터 목록
+            
+        Returns:
+            마크다운 형식의 용어집
+        """
+        # 용어집 데이터 필터링
+        glossary_items = [item for item in semantic_data if item["type"] == "glossary"]
+        
+        # 용어집 항목이 없으면 참조 데이터 사용
+        if not glossary_items:
+            glossary_items = [item for item in semantic_data if item["type"] == "reference"]
         
         if not glossary_items:
-            # GLOSSARY 타입 데이터가 없으면 참조 데이터로 대체
-            glossary_items = [d for d in semantic_data if d["type"] == "reference"]
+            return "# 용어집\n\n용어 데이터가 없습니다."
         
-        # 용어 이름 기준으로 알파벳순 정렬
-        glossary_items.sort(key=lambda x: x.get("term", x.get("content", "")).lower())
+        # 용어를 정렬하기 위한 함수
+        def get_sort_key(item):
+            term = item.get("term") or item.get("content", "")
+            return term.lower()
         
-        lines = [
-            "# 용어집",
-            f"\n_마지막 업데이트: {datetime.now().strftime('%Y-%m-%d %H:%M')}_\n",
-            "\n용어와 정의를 알파벳순으로 정리한 문서입니다.\n"
-        ]
+        # 용어 알파벳순 정렬
+        sorted_glossary = sorted(glossary_items, key=get_sort_key)
         
-        current_letter = None
-        for item in glossary_items:
-            # 용어가 term 필드에 있거나 content 필드에 있을 수 있음
-            term = item.get("term", item.get("content", ""))
+        # 용어별로 그룹화 (한글 초성 또는 알파벳 첫 글자 기준)
+        groups = {}
+        
+        for item in sorted_glossary:
+            term = item.get("term") or item.get("content", "")
             if not term:
                 continue
                 
-            # 첫 글자 추출 (한글, 영문, 숫자 등 모두 고려)
-            first_letter = term[0].upper()
+            # 첫 글자의 초성 또는 알파벳 추출
+            if re.match(r'[가-힣]', term[0]):
+                first_char = self._get_korean_consonant(term[0])
+            elif term[0].isalpha():
+                first_char = term[0].upper()
+            elif term[0].isdigit():
+                first_char = '0-9'
+            else:
+                first_char = '#'
             
-            # 한글인 경우 자음으로 분류
-            if '가' <= first_letter <= '힣':
-                consonant = self._get_korean_consonant(first_letter)
-                first_letter = consonant
-            
-            # 숫자인 경우 '#'으로 분류
-            if '0' <= first_letter <= '9':
-                first_letter = '#'
-            
-            # 특수문자인 경우 '_'로 분류
-            if not first_letter.isalnum():
-                first_letter = '_'
-            
-            # 새로운 문자로 시작하는 섹션 추가
-            if first_letter != current_letter:
-                current_letter = first_letter
-                lines.append(f"\n## {current_letter}\n")
-            
-            # 용어와 정의 추가
-            definition = item.get("definition", item.get("description", ""))
-            confidence = item.get("confidence", "")
-            
-            lines.append(f"### {term}\n")
-            
-            if definition:
-                lines.append(f"{definition}\n")
-            
-            # 대안적 정의가 있는 경우 추가
-            if "alternative_definitions" in item and item["alternative_definitions"]:
-                lines.append("\n대안적 정의:")
-                for idx, alt_def in enumerate(item["alternative_definitions"], 1):
-                    lines.append(f"{idx}. {alt_def}")
-                lines.append("")
-            
-            # 키워드 추가
-            if "keywords" in item and item["keywords"]:
-                lines.append(f"**관련 키워드**: {', '.join(item['keywords'])}\n")
-            
-            # 도메인 힌트 추가
-            if "domain_hint" in item and item["domain_hint"]:
-                lines.append(f"**관련 도메인**: {item['domain_hint']}\n")
-            
-            # 검토 필요 여부 표시
-            if item.get("needs_review", False):
-                lines.append(f"*이 용어의 정의는 검토가 필요합니다.*\n")
+            if first_char not in groups:
+                groups[first_char] = []
+            groups[first_char].append(item)
         
-        return "\n".join(lines)
+        # 마크다운 생성
+        md_content = ["# 용어집\n"]
+        
+        # 용어 유형별로 분리
+        service_terms = [item for item in sorted_glossary if item.get("term_type") == "service"]
+        development_terms = [item for item in sorted_glossary if item.get("term_type") == "development"]
+        design_terms = [item for item in sorted_glossary if item.get("term_type") == "design"]
+        marketing_terms = [item for item in sorted_glossary if item.get("term_type") == "marketing"]
+        etc_terms = [item for item in sorted_glossary if item.get("term_type") == "etc"]
+        
+        # 서비스 용어
+        if service_terms:
+            md_content.append("## 서비스 용어\n")
+            md_content.append("서비스와 관련된 핵심 용어들입니다.\n")
+            
+            for item in service_terms:
+                self._append_term_content(md_content, item)
+        
+        # 개발 용어
+        if development_terms:
+            md_content.append("\n## 개발 용어\n")
+            md_content.append("개발 및 기술과 관련된 용어들입니다.\n")
+            
+            for item in development_terms:
+                self._append_term_content(md_content, item)
+        
+        # 디자인 용어
+        if design_terms:
+            md_content.append("\n## 디자인 용어\n")
+            md_content.append("디자인과 관련된 용어들입니다.\n")
+            
+            for item in design_terms:
+                self._append_term_content(md_content, item)
+        
+        # 마케팅 용어
+        if marketing_terms:
+            md_content.append("\n## 마케팅 용어\n")
+            md_content.append("마케팅과 관련된 용어들입니다.\n")
+            
+            for item in marketing_terms:
+                self._append_term_content(md_content, item)
+        
+        # 기타 용어
+        if etc_terms:
+            md_content.append("\n## 기타 용어\n")
+            md_content.append("기타 분류의 용어들입니다.\n")
+            
+            for item in etc_terms:
+                self._append_term_content(md_content, item)
+        
+        return "\n".join(md_content)
+    
+    def _append_term_content(self, md_content: List[str], item: Dict[str, Any]) -> None:
+        """
+        용어 내용을 마크다운 형식으로 추가
+        
+        Args:
+            md_content: 마크다운 내용 리스트
+            item: 용어 항목
+        """
+        term = item.get("term") or item.get("content", "")
+        definition = item.get("definition", "")
+        confidence = item.get("confidence", "")
+        needs_review = item.get("needs_review", False)
+        
+        review_mark = " ⚠️ 검토 필요" if needs_review else ""
+        confidence_icon = {"high": "🟢", "medium": "🟡", "low": "🔴"}.get(confidence, "")
+        
+        # 대체 정의가 있는 경우
+        alt_definitions = item.get("alternative_definitions", [])
+        alt_def_text = ""
+        if alt_definitions:
+            alt_def_text += "\n\n**대체 정의:**\n"
+            for i, alt_def in enumerate(alt_definitions, 1):
+                alt_def_text += f"{i}. {alt_def}\n"
+        
+        # 키워드가 있는 경우
+        keywords = item.get("keywords", [])
+        keywords_text = ""
+        if keywords:
+            keywords_text += "\n\n**키워드:** " + ", ".join(keywords)
+        
+        # 도메인 힌트가 있는 경우
+        domain_hints = item.get("domain_hints", [])
+        domain_text = ""
+        if domain_hints:
+            domain_text += "\n\n**관련 분야:** " + ", ".join(domain_hints)
+        
+        md_content.append(f"### {term} {confidence_icon}{review_mark}\n\n{definition}{alt_def_text}{keywords_text}{domain_text}\n")
     
     def _get_korean_consonant(self, char: str) -> str:
         """한글 문자에서 초성 추출"""

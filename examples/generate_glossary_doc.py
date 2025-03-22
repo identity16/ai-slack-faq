@@ -7,109 +7,83 @@
 
 import os
 import asyncio
-from typing import List, Dict, Any
+from typing import Dict, Any, List
 
-from src.semantic_data import GlossaryExtractor, enhance_low_confidence_terms
 from src.document import DocumentGenerator, DocumentType
 from src.document.generators import MarkdownGenerator, HTMLGenerator
-
-
-async def generate_glossary_documents(glossary_data: List[Dict[str, Any]], output_dir: str):
-    """
-    용어집 데이터를 사용하여 마크다운 및 HTML 형식의 용어집 문서를 생성합니다.
-    
-    Args:
-        glossary_data: 용어집 데이터 리스트
-        output_dir: 출력 디렉토리 경로
-    """
-    # 출력 디렉토리가 없는 경우 생성
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # Markdown 생성기를 사용하여 마크다운 문서 생성
-    md_generator = MarkdownGenerator()
-    md_content = await md_generator.generate(glossary_data, DocumentType.GLOSSARY)
-    md_file_path = os.path.join(output_dir, "glossary.md")
-    
-    # HTML 생성기를 사용하여 HTML 문서 생성
-    html_generator = HTMLGenerator()
-    html_content = await html_generator.generate(glossary_data, DocumentType.GLOSSARY)
-    html_file_path = os.path.join(output_dir, "glossary.html")
-    
-    # 파일로 저장
-    with open(md_file_path, "w", encoding="utf-8") as f:
-        f.write(md_content)
-    print(f"마크다운 용어집 생성 완료: {md_file_path}")
-    
-    with open(html_file_path, "w", encoding="utf-8") as f:
-        f.write(html_content)
-    print(f"HTML 용어집 생성 완료: {html_file_path}")
-    
-    return md_file_path, html_file_path
-
-
-async def extract_and_generate_glossary(data: Dict[str, Any], output_dir: str):
-    """
-    데이터에서 용어집을 추출하고 문서를 생성합니다.
-    
-    Args:
-        data: 용어집을 추출할 데이터
-        output_dir: 출력 디렉토리 경로
-    """
-    # GlossaryExtractor를 사용하여 용어집 추출
-    extractor = GlossaryExtractor()
-    semantic_data = await extractor.extract(data)
-    
-    # 신뢰도가 낮은 용어에 대한 추가 처리
-    enhanced_data = await enhance_low_confidence_terms(semantic_data)
-    
-    # 용어집 문서 생성
-    return await generate_glossary_documents(enhanced_data, output_dir)
+from src.semantic_data import LLMClient, SlackExtractor, SemanticType
+from src.semantic_data import enhance_low_confidence_terms
 
 
 async def main():
-    """
-    예제 실행 함수
-    """
-    # 예제 데이터 (실제 사용 시에는 실제 데이터로 대체)
+    # 예시 데이터 정의
     example_data = {
         "messages": [
             {
-                "text": "API란 Application Programming Interface의 약자로, 소프트웨어 간의 통신을 위한 인터페이스입니다.",
-                "user": "U12345",
-                "ts": "1610000000.000000"
+                "text": "CI/CD 파이프라인은 개발자가 코드를 빠르고 안정적으로 배포할 수 있게 도와주는 자동화 프로세스입니다."
             },
             {
-                "text": "CI/CD는 Continuous Integration/Continuous Deployment의 약자로, 지속적 통합 및 배포를 의미합니다.",
-                "user": "U67890",
-                "ts": "1610000100.000000"
+                "text": "API는 Application Programming Interface의 약자로, 서로 다른 소프트웨어 시스템이 통신할 수 있게 하는 인터페이스입니다."
             },
             {
-                "text": "React는 페이스북에서 개발한 사용자 인터페이스를 구축하기 위한 JavaScript 라이브러리입니다.",
-                "user": "U12345",
-                "ts": "1610000200.000000"
+                "text": "React는 페이스북에서 개발한 자바스크립트 라이브러리로, 사용자 인터페이스를 구축하기 위한 도구입니다."
             },
             {
-                "text": "TDD는 Test Driven Development의 약자로, 테스트 주도 개발을 의미합니다.",
-                "user": "U67890",
-                "ts": "1610000300.000000"
+                "text": "Admin Board 시스템은 우리 회사에서 관리자가 사용자 데이터를 관리하고 통계를 확인하는 내부 대시보드입니다."
             },
             {
-                "text": "SDK는 Software Development Kit의 약자로, 특정 플랫폼을 위한 개발 도구 모음을 의미합니다.",
-                "user": "U12345",
-                "ts": "1610000400.000000"
+                "text": "우리 팀은 퍼플북 문서에 모든 시스템 설계와 아키텍처 정보를 기록하고 있어요."
+            },
+            {
+                "text": "신규 엔진은 회사에서 개발 중인 차세대 추천 시스템으로, 기존 시스템보다 더 정확한 추천을 제공합니다."
+            },
+            {
+                "text": "ROAS 대시보드에서 우리 마케팅 캠페인의 투자 수익률을 추적하고 있습니다."
+            },
+            {
+                "text": "AM 미팅은 매주 월요일 오전에 진행되는 계정 관리팀의 주간 업무 점검 회의입니다."
+            },
+            {
+                "text": "TDD 프로세스는 우리 개발팀이 모든 신규 기능 개발에 적용하는 테스트 주도 개발 방법론입니다."
+            },
+            {
+                "text": "iSDK는 우리 회사가 파트너들에게 제공하는 통합 소프트웨어 개발 키트로, API 연동을 쉽게 할 수 있습니다."
             }
         ]
     }
+
+    # LLM 클라이언트 초기화
+    openai_api_key = os.environ.get("OPENAI_API_KEY")
+    llm_client = LLMClient(api_key=openai_api_key)
+
+    # Slack 추출기 초기화 및 데이터 처리
+    extractor = SlackExtractor(llm_client=llm_client)
+    semantic_data = await extractor.process(example_data)
+
+    # 용어집 항목만 필터링
+    glossary_items = [item for item in semantic_data if item["type"] == SemanticType.GLOSSARY]
     
-    # 출력 디렉토리
-    output_dir = "output"
+    # 낮은 확신도의 용어 개선
+    enhanced_glossary = await enhance_low_confidence_terms(glossary_items, llm_client)
     
-    # 용어집 추출 및 문서 생성
-    md_file, html_file = await extract_and_generate_glossary(example_data, output_dir)
+    # 문서 생성기 초기화
+    md_generator = MarkdownGenerator()
+    html_generator = HTMLGenerator()
     
-    print(f"\n생성된 파일:")
-    print(f"- 마크다운: {md_file}")
-    print(f"- HTML: {html_file}")
+    # 마크다운 문서 생성 및 저장
+    md_content = await md_generator.generate(enhanced_glossary, DocumentType.GLOSSARY)
+    md_path = "examples/output/glossary.md"
+    os.makedirs(os.path.dirname(md_path), exist_ok=True)
+    await md_generator.save(md_content, md_path)
+    
+    # HTML 문서 생성 및 저장
+    html_content = await html_generator.generate(enhanced_glossary, DocumentType.GLOSSARY)
+    html_path = "examples/output/glossary.html"
+    await html_generator.save(html_content, html_path)
+    
+    print(f"생성된 파일:")
+    print(f"- {md_path}")
+    print(f"- {html_path}")
 
 
 if __name__ == "__main__":
