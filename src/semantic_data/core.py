@@ -506,7 +506,7 @@ class SlackGlossaryPromptTemplate(SemanticPromptTemplate):
                 {{
                     "term": "용어",
                     "definition": "정의",
-                    "term_type": "technical/business/etc",  // 용어 유형
+                    "term_type": "service/development/design/marketing/etc",  // 서비스, 개발, 디자인, 마케팅, 기타 등등
                     "confidence": "high/medium/low",  // 추출 신뢰도
                     "needs_review": true/false,  // 검토 필요 여부
                     "keywords": ["키워드1", "키워드2", ...]  // 관련 키워드
