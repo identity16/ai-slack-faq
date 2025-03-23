@@ -153,6 +153,133 @@ async def collect_slack_data(collector, channel_id, days, progress_bar, progress
             progress_text.text("완료: 처리할 항목이 없습니다.")
         print("[DEBUG] 최종 상태 업데이트 완료")
 
+# 시맨틱 데이터 추출 진행 상황을 업데이트하는 콜백 함수
+async def semantic_progress_callback(current, total, message=""):
+    """
+    시맨틱 데이터 추출 진행 상황을 업데이트하는 콜백 함수
+    
+    Args:
+        current: 현재까지 처리한 항목 수
+        total: 총 처리할 항목 수
+        message: 표시할 메시지 (선택 사항)
+    """
+    print(f"[SEMANTIC_PROGRESS] current={current}, total={total}, message={message}")
+    st.session_state.progress["current"] = current
+    st.session_state.progress["total"] = total
+    st.session_state.progress["message"] = message
+
+# 시맨틱 데이터 추출 함수 (프로그레스 바 업데이트 포함)
+async def extract_semantic_data(extractor, raw_data, progress_bar, progress_text):
+    """
+    시맨틱 데이터를 추출하고 진행 상황을 업데이트하는 함수
+    
+    Args:
+        extractor: SlackExtractor 또는 NotionExtractor 인스턴스
+        raw_data: 원본 데이터
+        progress_bar: Streamlit 프로그레스 바 객체
+        progress_text: Streamlit 텍스트 객체
+    
+    Returns:
+        추출된 시맨틱 데이터
+    """
+    # 별도의 업데이트 태스크 생성
+    update_task = None
+    
+    # 데이터 추출 시작
+    try:
+        # 총 항목 수 미리 설정 (초기화)
+        total_items = len(raw_data)
+        st.session_state.progress["total"] = total_items
+        st.session_state.progress["current"] = 0
+        st.session_state.progress["message"] = "시맨틱 데이터 추출 시작"
+        
+        print(f"[DEBUG] 총 처리할 항목 수: {total_items}")
+        
+        # 업데이트 태스크 시작
+        async def update_progress():
+            print("[DEBUG] 시맨틱 진행 상황 업데이트 태스크 시작")
+            try:
+                while True:
+                    # 진행 상황 가져오기
+                    current = st.session_state.progress["current"]
+                    total = st.session_state.progress["total"]
+                    message = st.session_state.progress["message"]
+                    
+                    # 콘솔에 현재 진행 상황 출력
+                    print(f"[UPDATE_SEMANTIC_PROGRESS] current={current}, total={total}, message={message}")
+                    
+                    # 프로그레스 바 업데이트
+                    if total > 0:
+                        progress = current / total
+                        progress_bar.progress(min(progress, 1.0))
+                        
+                        status_text = f"진행 중: {current} / {total} 항목"
+                        if message:
+                            status_text += f" - {message}"
+                        progress_text.text(status_text)
+                        
+                        # 모든 항목을 처리했으면 종료
+                        if current >= total and total > 0:
+                            print("[UPDATE_SEMANTIC_PROGRESS] 모든 항목 처리 완료, 업데이트 태스크 종료")
+                            break
+                    
+                    # 짧은 간격으로 업데이트 체크
+                    await asyncio.sleep(0.5)
+            
+            except Exception as e:
+                print(f"[ERROR] 시맨틱 진행 상황 업데이트 중 오류 발생: {str(e)}")
+                import traceback
+                print(traceback.format_exc())
+        
+        # 업데이트 태스크 시작
+        update_task = asyncio.create_task(update_progress())
+        
+        print("[DEBUG] 시맨틱 데이터 추출 시작")
+
+        # 동기식 콜백 함수 정의 (비동기 함수가 아님)
+        def progress_callback(current, total):
+            print(f"[CALLBACK_CALLED] current={current}, total={total}")
+            # 세션 상태 직접 업데이트
+            st.session_state.progress["current"] = current
+            st.session_state.progress["total"] = total
+            st.session_state.progress["message"] = f"항목 {current}/{total} 처리 중"
+        
+        # 데이터 추출 (progress_callback 전달)
+        semantic_data = await extractor.extract(raw_data, progress_callback=progress_callback)
+        print(f"[DEBUG] 시맨틱 데이터 추출 완료: {len(semantic_data)}개 항목")
+        
+        # 최종 진행 상황 업데이트
+        st.session_state.progress["current"] = total_items
+        st.session_state.progress["total"] = total_items
+        st.session_state.progress["message"] = f"총 {len(semantic_data)}개의 시맨틱 데이터 항목 추출 완료"
+        
+        return semantic_data
+    
+    finally:
+        # 업데이트 태스크가 실행 중이면 완료 대기
+        if update_task:
+            try:
+                print("[DEBUG] 시맨틱 업데이트 태스크 완료 대기")
+                # 짧은 시간 대기 후 취소 (이미 종료되었을 수 있음)
+                await asyncio.sleep(1)
+                if not update_task.done():
+                    update_task.cancel()
+                    try:
+                        await update_task
+                    except asyncio.CancelledError:
+                        pass
+                print("[DEBUG] 시맨틱 업데이트 태스크 정리 완료")
+            except Exception as e:
+                print(f"[ERROR] 시맨틱 업데이트 태스크 정리 중 오류: {str(e)}")
+        
+        # 완료 상태 표시
+        progress_bar.progress(1.0)
+        if st.session_state.progress["total"] > 0:
+            progress_text.text(f"완료: {st.session_state.progress['total']} / {st.session_state.progress['total']} 항목")
+        else:
+            progress_text.text("완료: 처리할 항목이 없습니다.")
+        print("[DEBUG] 시맨틱 최종 상태 업데이트 완료")
+
 # 헤더
 st.title("Log2Doc Playground")
 st.markdown("각 데이터 처리 단계를 독립적으로 시뮬레이션할 수 있는 Playground입니다.")
@@ -310,6 +437,16 @@ with tab2:
                     st.error(f"JSON 파싱 오류: {str(e)}")
         
         if raw_data_input and st.button("시맨틱 데이터 추출"):
+            # 진행 상황 초기화
+            st.session_state.progress = {"current": 0, "total": 0, "message": ""}
+            
+            # 진행 상황 표시 컴포넌트
+            progress_container = st.container()
+            with progress_container:
+                progress_text = st.empty()
+                progress_bar = st.progress(0)
+                progress_text.text("시맨틱 데이터 추출 준비 중...")
+            
             with st.spinner("시맨틱 데이터를 추출하는 중..."):
                 try:
                     if extractor_type == "Slack":
@@ -317,10 +454,27 @@ with tab2:
                     else:
                         extractor = NotionExtractor()
                     
-                    # extract 메서드 호출 수정
-                    st.session_state.semantic_data = run_async(extractor.extract, raw_data_input)
-                    st.success(f"{len(st.session_state.semantic_data)}개의 시맨틱 데이터 항목을 추출했습니다!")
+                    print(f"[DEBUG] 시맨틱 데이터 추출 시작: 유형={extractor_type}, 항목 수={len(raw_data_input)}")
+                    
+                    # 데이터 추출 및 진행 상황 업데이트 함수 호출
+                    st.session_state.semantic_data = run_async(
+                        extract_semantic_data,
+                        extractor,
+                        raw_data_input,
+                        progress_bar,
+                        progress_text
+                    )
+                    
+                    # 추출된 항목 수 계산
+                    extracted_count = len(st.session_state.semantic_data) if isinstance(st.session_state.semantic_data, list) else 0
+                    
+                    print(f"[DEBUG] 시맨틱 데이터 추출 완료: {extracted_count}개 항목 추출")
+                    st.success(f"{extracted_count}개의 시맨틱 데이터 항목을 추출했습니다!")
+                    
                 except Exception as e:
+                    print(f"[ERROR] 시맨틱 데이터 추출 오류: {str(e)}")
+                    import traceback
+                    print(traceback.format_exc())
                     st.error(f"데이터 추출 오류: {str(e)}")
     
     with col2:
