@@ -17,6 +17,10 @@ from src.semantic_data import (
     SlackExtractor, NotionExtractor
 )
 from src.document import DocumentType, MarkdownGenerator
+from src.logger_config import setup_logger
+
+# 로거 설정
+logger = setup_logger(__name__)
 
 # 페이지 설정
 st.set_page_config(page_title="Log2Doc Playground", layout="wide")
@@ -58,7 +62,7 @@ async def progress_callback(current, total, message=""):
         total: 총 수집할 항목 수
         message: 표시할 메시지 (선택 사항)
     """
-    print(f"[PROGRESS_CALLBACK] current={current}, total={total}, message={message}")
+    logger.debug(f"[PROGRESS_CALLBACK] current={current}, total={total}, message={message}")
     st.session_state.progress["current"] = current
     st.session_state.progress["total"] = total
     st.session_state.progress["message"] = message
@@ -85,7 +89,7 @@ async def collect_slack_data(collector, channel_id, days, progress_bar, progress
     try:
         # 업데이트 태스크 시작
         async def update_progress():
-            print("[DEBUG] 진행 상황 업데이트 태스크 시작")
+            logger.debug("진행 상황 업데이트 태스크 시작")
             try:
                 while True:
                     # 진행 상황 가져오기
@@ -94,7 +98,7 @@ async def collect_slack_data(collector, channel_id, days, progress_bar, progress
                     message = st.session_state.progress["message"]
                     
                     # 콘솔에 현재 진행 상황 출력
-                    print(f"[UPDATE_PROGRESS] current={current}, total={total}, message={message}")
+                    logger.debug(f"[UPDATE_PROGRESS] current={current}, total={total}, message={message}")
                     
                     # 프로그레스 바 업데이트
                     if total > 0:
@@ -107,28 +111,28 @@ async def collect_slack_data(collector, channel_id, days, progress_bar, progress
                         progress_text.text(status_text)
                         
                         # 디버그 로그
-                        print(f"[UPDATE_PROGRESS] 프로그레스 바 업데이트: {progress:.2f}, 텍스트: {status_text}")
+                        logger.debug(f"[UPDATE_PROGRESS] 프로그레스 바 업데이트: {progress:.2f}, 텍스트: {status_text}")
                         
                         # 모든 항목을 수집했으면 종료
                         if current >= total and total > 0:
-                            print("[UPDATE_PROGRESS] 모든 항목 처리 완료, 업데이트 태스크 종료")
+                            logger.debug("모든 항목 처리 완료, 업데이트 태스크 종료")
                             break
                     
                     # 짧은 간격으로 업데이트 체크
                     await asyncio.sleep(0.5)
             
             except Exception as e:
-                print(f"[ERROR] 프로그레스 업데이트 중 오류 발생: {str(e)}")
+                logger.error(f"프로그레스 업데이트 중 오류 발생: {str(e)}")
                 import traceback
-                print(traceback.format_exc())
+                logger.error(traceback.format_exc())
         
         # 업데이트 태스크 시작
         update_task = asyncio.create_task(update_progress())
         
-        print("[DEBUG] SlackCollector.collect 호출 시작")
+        logger.debug("SlackCollector.collect 호출 시작")
         # 데이터 수집 (progress_callback 전달)
         raw_data = await collector.collect(channel_id, days, progress_callback=progress_callback)
-        print("[DEBUG] SlackCollector.collect 호출 완료")
+        logger.debug("SlackCollector.collect 호출 완료")
         
         return raw_data
     
@@ -136,7 +140,7 @@ async def collect_slack_data(collector, channel_id, days, progress_bar, progress
         # 업데이트 태스크가 실행 중이면 완료 대기
         if update_task:
             try:
-                print("[DEBUG] 업데이트 태스크 완료 대기")
+                logger.debug("업데이트 태스크 완료 대기")
                 # 짧은 시간 대기 후 취소 (이미 종료되었을 수 있음)
                 await asyncio.sleep(1)
                 if not update_task.done():
@@ -145,9 +149,9 @@ async def collect_slack_data(collector, channel_id, days, progress_bar, progress
                         await update_task
                     except asyncio.CancelledError:
                         pass
-                print("[DEBUG] 업데이트 태스크 정리 완료")
+                logger.debug("업데이트 태스크 정리 완료")
             except Exception as e:
-                print(f"[ERROR] 업데이트 태스크 정리 중 오류: {str(e)}")
+                logger.error(f"업데이트 태스크 정리 중 오류: {str(e)}")
         
         # 완료 상태 표시
         progress_bar.progress(1.0)
@@ -155,7 +159,7 @@ async def collect_slack_data(collector, channel_id, days, progress_bar, progress
             progress_text.text(f"완료: {st.session_state.progress['total']} / {st.session_state.progress['total']} 항목")
         else:
             progress_text.text("완료: 처리할 항목이 없습니다.")
-        print("[DEBUG] 최종 상태 업데이트 완료")
+        logger.debug("최종 상태 업데이트 완료")
 
 # 시맨틱 데이터 추출 진행 상황을 업데이트하는 콜백 함수
 async def semantic_progress_callback(current, total, message=""):
@@ -167,7 +171,7 @@ async def semantic_progress_callback(current, total, message=""):
         total: 총 처리할 항목 수
         message: 표시할 메시지 (선택 사항)
     """
-    print(f"[SEMANTIC_PROGRESS] current={current}, total={total}, message={message}")
+    logger.debug(f"[SEMANTIC_PROGRESS] current={current}, total={total}, message={message}")
     st.session_state.progress["current"] = current
     st.session_state.progress["total"] = total
     st.session_state.progress["message"] = message
@@ -197,11 +201,11 @@ async def extract_semantic_data(extractor, raw_data, progress_bar, progress_text
         st.session_state.progress["current"] = 0
         st.session_state.progress["message"] = "시맨틱 데이터 추출 시작"
         
-        print(f"[DEBUG] 총 처리할 항목 수: {total_items}")
+        logger.debug(f"[DEBUG] 총 처리할 항목 수: {total_items}")
         
         # 업데이트 태스크 시작
         async def update_progress():
-            print("[DEBUG] 시맨틱 진행 상황 업데이트 태스크 시작")
+            logger.debug("시맨틱 진행 상황 업데이트 태스크 시작")
             try:
                 while True:
                     # 진행 상황 가져오기
@@ -210,7 +214,7 @@ async def extract_semantic_data(extractor, raw_data, progress_bar, progress_text
                     message = st.session_state.progress["message"]
                     
                     # 콘솔에 현재 진행 상황 출력
-                    print(f"[UPDATE_SEMANTIC_PROGRESS] current={current}, total={total}, message={message}")
+                    logger.debug(f"[UPDATE_SEMANTIC_PROGRESS] current={current}, total={total}, message={message}")
                     
                     # 프로그레스 바 업데이트
                     if total > 0:
@@ -224,25 +228,25 @@ async def extract_semantic_data(extractor, raw_data, progress_bar, progress_text
                         
                         # 모든 항목을 처리했으면 종료
                         if current >= total and total > 0:
-                            print("[UPDATE_SEMANTIC_PROGRESS] 모든 항목 처리 완료, 업데이트 태스크 종료")
+                            logger.debug("모든 항목 처리 완료, 업데이트 태스크 종료")
                             break
                     
                     # 짧은 간격으로 업데이트 체크
                     await asyncio.sleep(0.5)
             
             except Exception as e:
-                print(f"[ERROR] 시맨틱 진행 상황 업데이트 중 오류 발생: {str(e)}")
+                logger.error(f"시맨틱 진행 상황 업데이트 중 오류 발생: {str(e)}")
                 import traceback
-                print(traceback.format_exc())
+                logger.error(traceback.format_exc())
         
         # 업데이트 태스크 시작
         update_task = asyncio.create_task(update_progress())
         
-        print("[DEBUG] 시맨틱 데이터 추출 시작")
+        logger.debug("시맨틱 데이터 추출 시작")
 
         # 동기식 콜백 함수 정의 (비동기 함수가 아님)
         def progress_callback(current, total):
-            print(f"[CALLBACK_CALLED] current={current}, total={total}")
+            logger.debug(f"[CALLBACK_CALLED] current={current}, total={total}")
             # 세션 상태 직접 업데이트
             st.session_state.progress["current"] = current
             st.session_state.progress["total"] = total
@@ -250,7 +254,7 @@ async def extract_semantic_data(extractor, raw_data, progress_bar, progress_text
         
         # 데이터 추출 (progress_callback 전달)
         semantic_data = await extractor.extract(raw_data, progress_callback=progress_callback)
-        print(f"[DEBUG] 시맨틱 데이터 추출 완료: {len(semantic_data)}개 항목")
+        logger.debug(f"[DEBUG] 시맨틱 데이터 추출 완료: {len(semantic_data)}개 항목")
         
         # 최종 진행 상황 업데이트
         st.session_state.progress["current"] = total_items
@@ -263,7 +267,7 @@ async def extract_semantic_data(extractor, raw_data, progress_bar, progress_text
         # 업데이트 태스크가 실행 중이면 완료 대기
         if update_task:
             try:
-                print("[DEBUG] 시맨틱 업데이트 태스크 완료 대기")
+                logger.debug("시맨틱 업데이트 태스크 완료 대기")
                 # 짧은 시간 대기 후 취소 (이미 종료되었을 수 있음)
                 await asyncio.sleep(1)
                 if not update_task.done():
@@ -272,9 +276,9 @@ async def extract_semantic_data(extractor, raw_data, progress_bar, progress_text
                         await update_task
                     except asyncio.CancelledError:
                         pass
-                print("[DEBUG] 시맨틱 업데이트 태스크 정리 완료")
+                logger.debug("시맨틱 업데이트 태스크 정리 완료")
             except Exception as e:
-                print(f"[ERROR] 시맨틱 업데이트 태스크 정리 중 오류: {str(e)}")
+                logger.error(f"시맨틱 업데이트 태스크 정리 중 오류: {str(e)}")
         
         # 완료 상태 표시
         progress_bar.progress(1.0)
@@ -282,7 +286,7 @@ async def extract_semantic_data(extractor, raw_data, progress_bar, progress_text
             progress_text.text(f"완료: {st.session_state.progress['total']} / {st.session_state.progress['total']} 항목")
         else:
             progress_text.text("완료: 처리할 항목이 없습니다.")
-        print("[DEBUG] 시맨틱 최종 상태 업데이트 완료")
+        logger.debug("시맨틱 최종 상태 업데이트 완료")
 
 # 헤더
 st.title("Log2Doc Playground")
@@ -324,7 +328,7 @@ with tab1:
                         # config 딕셔너리를 사용하여 SlackCollector 초기화
                         collector = SlackCollector()
                         
-                        print(f"[DEBUG] 슬랙 데이터 수집 시작: 채널={channel_id}, 기간={days}일")
+                        logger.info(f"[DEBUG] 슬랙 데이터 수집 시작: 채널={channel_id}, 기간={days}일")
                         
                         # 데이터 수집 및 진행 상황 업데이트 함수 호출
                         st.session_state.raw_data = run_async(
@@ -339,12 +343,12 @@ with tab1:
                         # 수집된 항목 수 계산
                         collected_count = len(st.session_state.raw_data) if isinstance(st.session_state.raw_data, list) else 0
                         
-                        print(f"[DEBUG] 슬랙 데이터 수집 완료: {collected_count}개 스레드 수집")
+                        logger.info(f"[DEBUG] 슬랙 데이터 수집 완료: {collected_count}개 스레드 수집")
                         st.success(f"Slack 데이터 수집 완료! 총 {collected_count}개 스레드를 수집했습니다.")
                     except Exception as e:
-                        print(f"[ERROR] 데이터 수집 오류: {str(e)}")
+                        logger.error(f"[ERROR] 데이터 수집 오류: {str(e)}")
                         import traceback
-                        print(traceback.format_exc())
+                        logger.error(traceback.format_exc())
                         st.error(f"데이터 수집 오류: {str(e)}")
                     finally:
                         # 완료 메시지 표시를 위한 짧은 대기
@@ -362,6 +366,7 @@ with tab1:
                         st.session_state.raw_data = run_async(collector.collect, database_id)
                         st.success(f"Notion 데이터 수집 완료!")
                     except Exception as e:
+                        logger.error(f"데이터 수집 오류: {str(e)}")
                         st.error(f"데이터 수집 오류: {str(e)}")
     
     with col2:
@@ -388,8 +393,10 @@ with tab1:
                     filename = f"data/raw/{collector_type.lower()}_data_{int(time.time())}.json"
                     with open(filename, "w", encoding="utf-8") as f:
                         json.dump(st.session_state.raw_data, f, indent=2, ensure_ascii=False)
+                    logger.info(f"원본 데이터를 {filename}에 저장했습니다!")
                     st.success(f"원본 데이터를 {filename}에 저장했습니다!")
                 except Exception as e:
+                    logger.error(f"파일 저장 오류: {str(e)}")
                     st.error(f"파일 저장 오류: {str(e)}")
         else:
             st.info("원본 데이터를 수집하려면 왼쪽에서 데이터 소스를 설정하고 수집 버튼을 클릭하세요.")
@@ -400,8 +407,10 @@ with tab1:
         if uploaded_file is not None:
             try:
                 st.session_state.raw_data = json.load(uploaded_file)
-                st.success("파일에서 원본 데이터를 로드했습니다!")
+                logger.info("파일에서 원본 데이터를 성공적으로 로드했습니다.")
+                st.success("파일에서 원본 데이터를 성공적으로 로드했습니다.")
             except Exception as e:
+                logger.error(f"파일 로드 오류: {str(e)}")
                 st.error(f"파일 로드 오류: {str(e)}")
 
 # 탭 2: Semantic Data Extraction
@@ -456,7 +465,7 @@ with tab2:
                     else:
                         extractor = NotionExtractor()
                     
-                    print(f"[DEBUG] 시맨틱 데이터 추출 시작: 유형={extractor_type}, 항목 수={len(raw_data_input)}")
+                    logger.info(f"[DEBUG] 시맨틱 데이터 추출 시작: 유형={extractor_type}, 항목 수={len(raw_data_input)}")
                     
                     # 데이터 추출 및 진행 상황 업데이트 함수 호출
                     st.session_state.semantic_data = run_async(
@@ -470,13 +479,13 @@ with tab2:
                     # 추출된 항목 수 계산
                     extracted_count = len(st.session_state.semantic_data) if isinstance(st.session_state.semantic_data, list) else 0
                     
-                    print(f"[DEBUG] 시맨틱 데이터 추출 완료: {extracted_count}개 항목 추출")
+                    logger.info(f"[DEBUG] 시맨틱 데이터 추출 완료: {extracted_count}개 항목 추출")
                     st.success(f"{extracted_count}개의 시맨틱 데이터 항목을 추출했습니다!")
                     
                 except Exception as e:
-                    print(f"[ERROR] 시맨틱 데이터 추출 오류: {str(e)}")
+                    logger.error(f"[ERROR] 시맨틱 데이터 추출 오류: {str(e)}")
                     import traceback
-                    print(traceback.format_exc())
+                    logger.error(traceback.format_exc())
                     st.error(f"데이터 추출 오류: {str(e)}")
     
     with col2:
@@ -504,8 +513,10 @@ with tab2:
                     filename = f"data/semantic/{extractor_type.lower()}_semantic_{int(time.time())}.json"
                     with open(filename, "w", encoding="utf-8") as f:
                         json.dump(st.session_state.semantic_data, f, indent=2, ensure_ascii=False)
+                    logger.info(f"시맨틱 데이터를 {filename}에 저장했습니다!")
                     st.success(f"시맨틱 데이터를 {filename}에 저장했습니다!")
                 except Exception as e:
+                    logger.error(f"파일 저장 오류: {str(e)}")
                     st.error(f"파일 저장 오류: {str(e)}")
         else:
             st.info("시맨틱 데이터를 추출하려면 왼쪽에서 설정을 완료하고 추출 버튼을 클릭하세요.")
@@ -516,8 +527,10 @@ with tab2:
         if uploaded_file is not None:
             try:
                 st.session_state.semantic_data = json.load(uploaded_file)
-                st.success("파일에서 시맨틱 데이터를 로드했습니다!")
+                logger.info("파일에서 시맨틱 데이터를 성공적으로 로드했습니다.")
+                st.success("파일에서 시맨틱 데이터를 성공적으로 로드했습니다.")
             except Exception as e:
+                logger.error(f"파일 로드 오류: {str(e)}")
                 st.error(f"파일 로드 오류: {str(e)}")
 
 # 탭 3: Document Generation
@@ -562,6 +575,8 @@ with tab3:
                 try:
                     generator = MarkdownGenerator()
                     
+                    logger.info(f"문서 생성 시작: 유형={doc_type}")
+                    
                     # generate 메서드 호출 수정
                     document_content = run_async(generator.generate, semantic_data_input, doc_type)
                     st.session_state.generated_document = document_content
@@ -569,12 +584,15 @@ with tab3:
                     # 문서 저장 (옵션)
                     if output_path:
                         os.makedirs(output_path, exist_ok=True)
-                        filename = f"{output_path}/{doc_type}_{int(time.time())}.md"
+                        filename = os.path.join(output_path, f"{doc_type}_{int(time.time())}.md")
                         run_async(generator.save, document_content, filename)
+                        logger.info(f"문서를 {filename}에 저장했습니다!")
                         st.success(f"문서를 {filename}에 저장했습니다!")
                     
+                    logger.info("문서 생성이 완료되었습니다!")
                     st.success("문서 생성이 완료되었습니다!")
                 except Exception as e:
+                    logger.error(f"문서 생성 오류: {str(e)}")
                     st.error(f"문서 생성 오류: {str(e)}")
     
     with col2:

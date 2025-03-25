@@ -7,5 +7,5 @@ results/
 
 # 데이터 파일
 data/
-
 .DS_Store
+logs/
