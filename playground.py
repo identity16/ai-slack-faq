@@ -3,7 +3,11 @@ import asyncio
 import json
 import os
 import time
+import ssl
 from typing import Callable, Coroutine
+
+# macOS에서 SSL 인증서 문제 해결
+ssl._create_default_https_context = ssl._create_unverified_context
 
 # 각 모듈 임포트
 from src.raw_data.collectors.slack import SlackCollector
