@@ -301,7 +301,6 @@ with tab1:
         
         if collector_type == "Slack":
             st.subheader("Slack 설정")
-            slack_token = st.text_input("Slack Token", value=os.getenv("SLACK_TOKEN", ""), type="password")
             channel_id = st.text_input("Channel ID", value=os.getenv("SLACK_CHANNEL_ID", ""))
             days = st.number_input("검색 기간 (일)", min_value=1, max_value=30, value=3)
             
@@ -319,7 +318,7 @@ with tab1:
                 with st.spinner("Slack에서 데이터를 수집하는 중..."):
                     try:
                         # config 딕셔너리를 사용하여 SlackCollector 초기화
-                        collector = SlackCollector(config={"slack_token": slack_token})
+                        collector = SlackCollector()
                         
                         print(f"[DEBUG] 슬랙 데이터 수집 시작: 채널={channel_id}, 기간={days}일")
                         
@@ -349,12 +348,11 @@ with tab1:
                 
         elif collector_type == "Notion":
             st.subheader("Notion 설정")
-            notion_token = st.text_input("Notion Token", value=os.getenv("NOTION_TOKEN", ""), type="password")
             database_id = st.text_input("Database ID", value=os.getenv("NOTION_DATABASE_ID", ""))
             
             if st.button("Notion 데이터 수집"):
                 with st.spinner("Notion에서 데이터를 수집하는 중..."):
-                    collector = NotionCollector(config={"notion_token": notion_token})
+                    collector = NotionCollector()
                     try:
                         # NotionCollector.collect를 호출하여 데이터 수집
                         st.session_state.raw_data = run_async(collector.collect, database_id)
