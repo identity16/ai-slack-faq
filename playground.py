@@ -352,7 +352,7 @@ with tab1:
                 
         elif collector_type == "Notion":
             st.subheader("Notion 설정")
-            database_id = st.text_input("Database ID", value=os.getenv("NOTION_DATABASE_ID", ""))
+            database_id = st.text_input("Database ID", value="")
             
             if st.button("Notion 데이터 수집"):
                 with st.spinner("Notion에서 데이터를 수집하는 중..."):
